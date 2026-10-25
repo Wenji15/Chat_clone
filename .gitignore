@@ -12,6 +12,8 @@ data/raw/wechat/
 data/avatars/
 data/profiles/
 data/entity_notes.json
+data/bot_state.json
+data/entity_cache.json
 
 # 模型与训练产物（体积大，勿提交）
 training/models/
