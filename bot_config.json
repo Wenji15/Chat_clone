@@ -1,0 +1,20 @@
+{
+  "target": "杨文祥",
+  "interval": 3,
+  "cooldown": 6,
+  "live": true,
+  "reply_existing": false,
+  "multi_chats": [
+    "杨文祥",
+    "小鸽哥踢球群",
+    "🐦🐦",
+    "王宇航",
+    "外卖一群",
+    "苏博",
+    "Jerry",
+    "敖民",
+    "冯自灏"
+  ],
+  "vlm_model": "qwen2.5vl:3b-ctx",
+  "log": "logs/wechat_bot.log"
+}

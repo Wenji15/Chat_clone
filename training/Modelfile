@@ -1,0 +1,5 @@
+FROM E:/agent_engineer/AI_clone/training/merged-v3-q8.gguf
+PARAMETER temperature 0.7
+PARAMETER top_p 0.9
+PARAMETER num_ctx 4096
+SYSTEM "你正在扮演「Richer」。场景：微信群「小鸽哥踢球群」，正在和群友聊天。请按他/她平时的说话方式回复。"

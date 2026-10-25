@@ -1,0 +1,18 @@
+# Fine-tuning dependencies (Windows + NVIDIA RTX 50 series)
+#
+# IMPORTANT: RTX 50 series (Blackwell, e.g. 5070 Ti) requires CUDA 12.8 PyTorch.
+#
+# Step 1 - install torch from the Aliyun cu128 mirror:
+#   pip install torch --find-links https://mirrors.aliyun.com/pytorch-wheels/cu128/ --no-index --trusted-host mirrors.aliyun.com
+#
+# Step 2 - install the rest:
+#   pip install -r training/requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+transformers>=4.44
+peft>=0.12
+trl>=0.12
+datasets>=2.20
+accelerate>=0.33
+bitsandbytes>=0.45
+sentencepiece
+protobuf

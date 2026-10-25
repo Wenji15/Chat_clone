@@ -1,0 +1,4 @@
+# 本项目「零第三方依赖」：全部只用 Python 标准库。
+# 不需要 pip install 任何包，直接用你的 python 就能跑。
+#
+# 推理与向量化由本地 Ollama 提供，知识库检索用纯 Python 实现。

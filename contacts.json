@@ -1,0 +1,12 @@
+{
+  "default": {
+    "type": "unknown",
+    "relation": "未知",
+    "tone": "礼貌、自然、简短"
+  },
+  "杨文祥": {
+    "type": "friend",
+    "relation": "朋友",
+    "tone": "随意、开玩笑、短句、偶尔自嘲"
+  }
+}
