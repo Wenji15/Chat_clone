@@ -45,6 +45,11 @@ def main() -> int:
     ap.add_argument("--max-steps", type=int, default=-1, help="调试用：只训几步")
     ap.add_argument("--save-steps", type=int, default=50, help="每多少步存一次检查点")
     ap.add_argument("--no-4bit", action="store_true", help="显存足够时可关闭 4bit")
+    ap.add_argument(
+        "--resume",
+        default="",
+        help="从 checkpoint 续训，例如 training/output-turns/checkpoint-237",
+    )
     args = ap.parse_args()
 
     ds = load_dataset("json", data_files={"train": args.data, "val": args.val})
@@ -114,7 +119,7 @@ def main() -> int:
         peft_config=lora,
         processing_class=tok,
     )
-    trainer.train()
+    trainer.train(resume_from_checkpoint=args.resume or None)
     trainer.save_model(args.output)
     tok.save_pretrained(args.output)
     print(f"训练完成，LoRA 适配器已保存到 {args.output}")
