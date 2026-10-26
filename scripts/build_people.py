@@ -34,26 +34,46 @@ def collect_by_person() -> dict[str, list[dict]]:
         if not d.is_dir():
             continue
         chat = d.name
-        for m in load_messages(chat):
+        msgs = load_messages(chat)
+        for i, m in enumerate(msgs):
             if m.get("role") != "them":
                 continue
             name = clean_sender(m.get("sender"))
             if not name:
                 continue
+            win = msgs[max(0, i - 2) : i + 3]
+            lines = []
+            for x in win:
+                who = (
+                    "我"
+                    if x.get("role") == "me"
+                    else (clean_sender(x.get("sender")) or "成员")
+                )
+                lines.append(f"{who}：{x.get('text', '')}")
             out.setdefault(name, []).append(
-                {"chat": chat, "ts": m.get("ts", ""), "text": m.get("text", "")}
+                {
+                    "chat": chat,
+                    "ts": m.get("ts", ""),
+                    "ctx": "\n".join(lines),
+                }
             )
     return out
 
 
 def summarize_chunk(client: OllamaClient, name: str, rows: list[dict]) -> str:
-    body = "\n".join(f"[{r['ts']}] {r['text']}" for r in rows)
+    body = "\n---\n".join(r["ctx"] for r in rows)
     prompt = (
-        f"下面是我和「{name}」的聊天片段（我是吴恩吉，{name} 是对方）。"
-        "请只根据这些内容，提炼关于对方的要点：\n"
+        "下面是一个微信群里的聊天片段，每条前面是说话人，"
+        f"「我」是吴恩吉，「{name}」是我们要分析的人。\n"
+        "重要规则：\n"
+        f"1. {name} 说的话不一定是对「我」说的，可能是在回别人或自言自语；\n"
+        "2. 只有明确 @我、回复我、或与我连续对话的内容，才算「对我的态度」；\n"
+        "3. 不要推断恋爱、暧昧、性别；没有明确依据就写“不确定”；\n"
+        "4. 区分“对群友的态度”和“对我的态度”。\n"
+        "请提炼：\n"
         "- 关系/身份\n- 性格\n- 说话风格（句长、口头禅、梗）\n"
-        "- 常聊话题\n- 对我的态度\n- 近期状态\n"
-        "- 有代表性的原话 1-3 条\n"
+        "- 常聊话题\n- 对群友的态度\n- 对我的态度（仅直接互动）\n"
+        "- 近期状态\n- 有代表性的原话 1-3 条\n"
         "不确定的写“不确定”，不要编造。用简洁中文条目。\n\n"
         + body
     )
@@ -66,7 +86,9 @@ def finalize(client: OllamaClient, name: str, notes: str, total: int, span: str)
     prompt = (
         f"请把下面关于「{name}」的零散笔记合并成一份档案（Markdown）。"
         "保留有依据的内容，去掉重复；不确定的标注“不确定”。"
-        "结构：关系、性格、说话风格、常聊话题、对我的态度、近期状态、口头禅/梗、原话依据。\n\n"
+        "不要推断恋爱/暧昧/性别；没有直接互动证据时，“对我的态度”写“不确定”。"
+        "结构：关系、性格、说话风格、常聊话题、对群友的态度、"
+        "对我的态度（仅直接互动）、近期状态、口头禅/梗、原话依据。\n\n"
         f"消息数：{total}，时间范围：{span}\n\n{notes}"
     )
     body = client.chat_native(
