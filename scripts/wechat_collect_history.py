@@ -133,6 +133,7 @@ def parse_history(
 
     rows: list[dict] = []
     last_sender = ""
+    last_ts = ""
     for it in sorted(contents, key=lambda i: i["y0"]):
         if any(n in it["text"] for n in UI_NOISE):
             continue
@@ -164,7 +165,11 @@ def parse_history(
         if sender not in me_names and sender != "我":
             last_sender = sender
         tcand = [t for t in times if abs(t[0] - sy) <= 30]
-        ts = min(tcand, key=lambda t: abs(t[0] - sy))[1] if tcand else ""
+        if tcand:
+            ts = min(tcand, key=lambda t: abs(t[0] - sy))[1]
+            last_ts = ts
+        else:
+            ts = last_ts  # 同一分钟的消息不重复显示时间，继承上一条
         role = "me" if sender in me_names or sender == "我" else "them"
         rows.append(
             {
@@ -241,7 +246,12 @@ def open_history_window(hwnd: int, engine: RapidOCR) -> bool:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--screens", type=int, default=10)
-    ap.add_argument("--step", type=int, default=18, help="每屏滚动次数(4-20)")
+    ap.add_argument(
+        "--step",
+        type=int,
+        default=10,
+        help="每屏滚动格数(4-20；1 格约 3 行，10 格约 600px，留重叠)",
+    )
     ap.add_argument("--name", type=str, default="")
     ap.add_argument("--chat", type=str, default="", help="先搜索并打开这个会话")
     ap.add_argument("--auto-open", action="store_true", help="自动打开聊天记录窗口")
@@ -311,6 +321,7 @@ def main() -> int:
 
     engine = RapidOCR()
     screens: list[list[dict]] = []
+    seen: set[tuple[str, str]] = set()
     for i in range(args.screens):
         if (ROOT / "STOP_COLLECT").exists():
             try:
@@ -324,11 +335,20 @@ def main() -> int:
                 break
             time.sleep(0.3)
         msgs = parse_history(engine, capture(hwnd), chat_name, me_names, is_group)
+        new = [
+            m
+            for m in msgs
+            if (m.get("sender"), m.get("text")) not in seen
+        ]
+        seen.update((m.get("sender"), m.get("text")) for m in msgs)
         screens.append(msgs)
-        print(f"[{i}] {len(msgs)} 条")
+        print(f"[{i}] {len(msgs)} 条（新增 {len(new)}）")
+        if i > 0 and not new:
+            print("没有新消息，停止（可能已到底部）")
+            break
         for _ in range(args.step):
-            pyautogui.scroll(-120)
-            time.sleep(0.05)
+            pyautogui.scroll(-1)
+            time.sleep(0.03)
         time.sleep(0.6)
 
     if not any(screens):
