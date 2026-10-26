@@ -27,6 +27,8 @@ def _clean_reply(text: str) -> str:
     text = (text or "").strip()
     text = text.replace("\r", " ").replace("\n", " ")  # 微信回复不换行
     text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"@[^\s，。！？!?]+", "", text)  # 微信回复默认不带 @
+    text = re.sub(r"\s{2,}", " ", text).strip()
     text = re.sub(r"(.{1,12}?)\1{3,}", r"\1", text)  # 连续重复片段只留一次
     if text.count("@") > 2:  # 最多保留 2 个 @
         idx = -1
