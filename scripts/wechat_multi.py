@@ -31,7 +31,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from src.agent import CloneAgent  # noqa: E402
 from src.config_loader import load_config  # noqa: E402
 from src.reply_desire import classify, should_reply  # noqa: E402
-from src.wechat_store import append_messages, export_markdown  # noqa: E402
+from src.wechat_store import append_messages, export_markdown, load_messages  # noqa: E402
 from src.wechat_unread import detect_unread  # noqa: E402
 from src.wechat_win import capture, find_wechat_hwnd, set_dpi_aware, window_rect  # noqa: E402
 from src.wechat_layout import detect_chat_x0, detect_chat_x0_ex  # noqa: E402
@@ -264,6 +264,18 @@ def main() -> int:
             history = ws.build_history(n_incoming, n_outgoing)
             print(f"  [collect] 又收到：{n_last_in[1]!r}")
 
+        # 上一条已存消息距现在多久（用于判断是否换了话题）
+        gap_minutes = None
+        try:
+            stored = load_messages(title)
+            if stored:
+                last_ts = time.mktime(
+                    time.strptime(str(stored[-1].get("ts"))[:16], "%Y-%m-%d %H:%M")
+                )
+                gap_minutes = (time.time() - last_ts) / 60
+        except Exception:
+            gap_minutes = None
+
         # 实时入库（按 ts+sender+text 去重），有新消息就更新语料
         try:
             for m in history:
@@ -310,7 +322,8 @@ def main() -> int:
         rounds = 0
         last_text = collected[-1]
         while rounds < 3:
-            reply = agent.chat_reply(history, chat=title)
+            reply = agent.chat_reply(history, chat=title, gap_minutes=gap_minutes)
+            gap_minutes = None
             if not reply:
                 print("  [skip] 模型返回空回复")
                 break

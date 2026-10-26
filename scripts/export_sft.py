@@ -19,6 +19,7 @@ import argparse
 import json
 import random
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -27,10 +28,39 @@ sys.path.insert(0, str(ROOT))
 from src.wechat_store import STORE, load_messages  # noqa: E402
 
 
+def _parse_ts(s):
+    try:
+        return time.mktime(time.strptime(str(s)[:16], "%Y-%m-%d %H:%M"))
+    except Exception:
+        return 0.0
+
+
+def merge_turns(msgs: list[dict]) -> list[dict]:
+    """把连续同一发送者的消息合并成一个“轮次”。"""
+    turns: list[dict] = []
+    for m in msgs:
+        text = (m.get("text") or "").strip()
+        if not text:
+            continue
+        sender = m.get("sender") or ""
+        ts = m.get("ts")
+        if turns and turns[-1]["sender"] == sender:
+            turns[-1]["text"] += "\n" + text
+            turns[-1]["end"] = ts
+        else:
+            turns.append({"sender": sender, "text": text, "start": ts, "end": ts})
+    return turns
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--all", action="store_true", help="为所有发送者各生成样本")
     ap.add_argument("--split", type=float, default=0.9, help="训练集比例")
+    ap.add_argument(
+        "--turns",
+        action="store_true",
+        help="按轮次导出：合并连续同人、不标注发言人、带时间间隔",
+    )
     args = ap.parse_args()
 
     persona = ""
@@ -45,6 +75,40 @@ def main() -> int:
                 continue
             chat = d.name
             msgs = load_messages(chat)
+
+            if args.turns:
+                turns = merge_turns(msgs)
+                is_group = chat.endswith("群") or chat == "🐦🐦"
+                scene = f"微信群「{chat}」" if is_group else f"私聊「{chat}」"
+                for i, t in enumerate(turns):
+                    if i == 0:
+                        continue
+                    target = (t.get("text") or "").strip()
+                    if not target:
+                        continue
+                    if target.count("@") >= 3 and len(target) < 40:
+                        continue
+                    ctx = turns[max(0, i - 4) : i]
+                    if not ctx:
+                        continue
+                    gap = 0.0
+                    a, b = _parse_ts(ctx[-1].get("end")), _parse_ts(t.get("start"))
+                    if a and b:
+                        gap = b - a
+                    user_lines = [c["text"] for c in ctx]
+                    if gap > 1800:
+                        user_lines.append(f"（距上条 {int(gap // 60)} 分钟）")
+                    samples.append(
+                        {
+                            "messages": [
+                                {"role": "system", "content": f"场景：{scene}。"},
+                                {"role": "user", "content": "\n".join(user_lines)},
+                                {"role": "assistant", "content": target},
+                            ]
+                        }
+                    )
+                continue
+
             for i, m in enumerate(msgs):
                 text = (m.get("text") or "").strip()
                 sender = (m.get("sender") or "").strip()
@@ -100,7 +164,7 @@ def main() -> int:
 
     out_dir = ROOT / "data" / "finetune"
     out_dir.mkdir(parents=True, exist_ok=True)
-    base = "sft_all" if args.all else "sft"
+    base = "sft_turns" if args.turns else ("sft_all" if args.all else "sft")
 
     full = out_dir / f"{base}.jsonl"
     with open(full, "w", encoding="utf-8") as f:

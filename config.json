@@ -11,6 +11,7 @@
   "history_window": 2,
   "history_days": 3,
   "history_max_messages": 999,
+  "gap_threshold_minutes": 30,
   "num_ctx": 8192,
   "thinking": false,
   "thinking_answer": true,

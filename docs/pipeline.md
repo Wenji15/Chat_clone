@@ -197,6 +197,8 @@ python scripts\query.py "闫总是谁"        # 检索 + 回答
 ```powershell
 # 1) 导出数据
 python scripts\export_sft.py --all
+# 按轮次导出（合并连续同人、不标发言人、带时间间隔）
+python scripts\export_sft.py --turns
 
 # 2) 训练（16G 显存：7B + 4bit QLoRA）
 python training\train_lora.py --model training\models\Qwen2.5-7B-Instruct --epochs 2 --lr 1.2e-4
@@ -424,7 +426,7 @@ schtasks /Create /SC WEEKLY /D SUN /TN "AI_Clone_Retrain" ^
 
 | 脚本 | 作用 | 用法 |
 |------|------|------|
-| `export_sft.py` | 导出 SFT 数据（默认只学“我”，`--all` 所有人） | `python scripts\export_sft.py --all` |
+| `export_sft.py` | 导出 SFT 数据（默认只学“我”，`--all` 所有人，`--turns` 按轮次） | `python scripts\export_sft.py --all` |
 | `export_person.py` | 按人导出（每人一份 train/val） | `python scripts\export_person.py --min-samples 100` |
 | `training/train_lora.py` | QLoRA 训练（assistant-only、防过拟合） | `python training\train_lora.py --data data\finetune\sft_all_train.jsonl --val ... --output training\output-all --epochs 2 --lr 1.2e-4` |
 | `training/merge_lora.py` | 合并 LoRA 到基础模型 | `python training\merge_lora.py --adapter training\output-all --output training\merged-all` |
@@ -494,3 +496,12 @@ OCR → build_history → append_messages（去重）→ export_markdown → 分
 - 再做余弦 top-k（`history_topk` / `history_min_score` / `history_window`）
 
 > 效果：不会因为几个月前的旧消息干扰当前话题，也避免索引无限增长后检索变慢。
+
+### 13.4 轮次合并与时间间隔
+
+训练与推理都按“轮次”处理：
+
+- **合并**：连续同一发送者的多段话合并成一轮
+- **训练**：`python scripts\export_sft.py --turns` → `sft_turns_*.jsonl`（不标注发言人）
+- **推理**：`chat_reply` 先把连续同角色消息合并，再拼上下文
+- **时间间隔**：相邻轮次间隔 > `gap_threshold_minutes`（默认 30）时，提示“可能是新话题，不要强行衔接”

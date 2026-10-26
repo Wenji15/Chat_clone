@@ -33,6 +33,21 @@ def _clean_reply(text: str) -> str:
     return text.strip()
 
 
+def _merge_history(history: list[dict]) -> list[dict]:
+    """把连续同一角色的消息合并成一轮，和训练样本的“轮次”保持一致。"""
+    out: list[dict] = []
+    for m in history:
+        text = str(m.get("text", "")).strip()
+        if not text:
+            continue
+        role = "me" if m.get("role") == "me" else "them"
+        if out and out[-1]["role"] == role:
+            out[-1]["text"] += "\n" + text
+        else:
+            out.append({"role": role, "text": text})
+    return out
+
+
 def _is_degenerate(text: str) -> bool:
     """判断是否是复读/刷屏式输出。"""
     if len(text) > 120 or text.count("@") > 4:
@@ -206,7 +221,11 @@ class CloneAgent:
 
     # ------------------------------------------------------------------ #
     def chat_reply(
-        self, history: list[dict], max_sentences: int = 3, chat: str = ""
+        self,
+        history: list[dict],
+        max_sentences: int = 3,
+        chat: str = "",
+        gap_minutes: float | None = None,
     ) -> str:
         """微信替聊模式：根据最近对话生成简短、口语化的回复。
 
@@ -217,8 +236,9 @@ class CloneAgent:
         recent = [m for m in history[-40:] if isinstance(m, dict) and m.get("text")]
         if not recent:
             return ""
+        merged = _merge_history(recent)
         lines = []
-        for m in recent:
+        for m in merged:
             who = "我" if m.get("role") == "me" else "对方"
             lines.append(f"{who}：{str(m.get('text', '')).strip()}")
         convo = "\n".join(lines)
@@ -251,6 +271,12 @@ class CloneAgent:
             )
         if profile:
             system += f"\n\n【对话对象/群的画像】\n{profile}"
+        gap_thr = float(self.cfg.get("gap_threshold_minutes", 30))
+        if gap_minutes and gap_minutes > gap_thr:
+            system += (
+                f"\n\n（距上条消息约 {int(gap_minutes)} 分钟，可能是新话题；"
+                "不要强行衔接旧内容。）"
+            )
         snippets: list = []
         if chat:
             try:
