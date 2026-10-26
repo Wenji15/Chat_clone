@@ -254,9 +254,9 @@ def main() -> int:
     )
     ap.add_argument(
         "--mode",
-        choices=["page", "wheel"],
+        choices=["page", "wheel", "keys"],
         default="page",
-        help="翻页方式：page=PageDown 一页，wheel=滚轮",
+        help="翻页方式：page=PageDown，wheel=滚轮，keys=方向键逐行",
     )
     ap.add_argument("--name", type=str, default="")
     ap.add_argument("--chat", type=str, default="", help="先搜索并打开这个会话")
@@ -372,6 +372,10 @@ def main() -> int:
         pyautogui.moveTo(left + int(w * 0.5), top + int(h * 0.6))
         if args.mode == "page":
             pyautogui.press("pagedown")
+        elif args.mode == "keys":
+            for _ in range(args.step):
+                pyautogui.press("down")
+                time.sleep(0.03)
         else:
             pyautogui.scroll(-args.step)
         time.sleep(0.8)
