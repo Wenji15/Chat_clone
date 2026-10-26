@@ -3,6 +3,7 @@
   "interval": 3,
   "cooldown": 6,
   "live": true,
+  "review_mode": false,
   "reply_existing": false,
   "multi_chats": [
     "杨文祥",
