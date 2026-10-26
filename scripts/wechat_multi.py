@@ -66,7 +66,7 @@ TIME_RE = re.compile(
 )
 
 
-def list_titles(engine, img) -> list[tuple[str, int]]:
+def list_titles(engine, img, whitelist: set[str] | None = None) -> list[tuple[str, int]]:
     """OCR 会话列表，返回 [(标题文本, y)]。"""
     w, h = img.size
     x0, found = detect_chat_x0_ex(img)
@@ -85,9 +85,14 @@ def list_titles(engine, img) -> list[tuple[str, int]]:
         # 过滤时间/日期，避免把“19:25”当成会话名
         if TIME_RE.match(t.replace(" ", "")):
             continue
-        # 过滤纯数字/符号
+        # 过滤纯数字/符号；但 emoji 群名（如 🐦🐦）和白名单标题要保留
         if re.fullmatch(r"[\d\W_]+", t):
-            continue
+            in_whitelist = bool(whitelist) and any(
+                w and (w in t or t in w) for w in whitelist
+            )
+            is_emoji = bool(re.search(r"[\U0001F000-\U0001FAFF]", t)) and len(t) <= 6
+            if not in_whitelist and not is_emoji:
+                continue
         # 过滤消息预览（“发送者：内容”、[图片]、[小程序]、撤回提示等）
         if re.search(r"[：:]", t) or t.startswith("[") or "撤回" in t:
             continue
@@ -396,7 +401,7 @@ def main() -> int:
             time.sleep(args.interval)
             continue
 
-        rows = list_titles(engine, img)
+        rows = list_titles(engine, img, whitelist)
         tmatches = match_templates(img, templates)
         for d in dots:
             title = associate(d, rows)
