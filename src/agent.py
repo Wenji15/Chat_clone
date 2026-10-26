@@ -33,15 +33,19 @@ def _clean_reply(text: str) -> str:
     return text.strip()
 
 
-def _merge_history(history: list[dict]) -> list[dict]:
-    """把连续同一角色的消息合并成一轮，和训练样本的“轮次”保持一致。"""
+def _merge_history(history: list[dict], merge_them: bool = True) -> list[dict]:
+    """把连续同一角色的消息合并成一轮。
+
+    群聊实时 OCR 拿不到发送人，merge_them=False 时只合并“我”的连续消息，
+    避免把不同人的话误并成一轮。
+    """
     out: list[dict] = []
     for m in history:
         text = str(m.get("text", "")).strip()
         if not text:
             continue
         role = "me" if m.get("role") == "me" else "them"
-        if out and out[-1]["role"] == role:
+        if out and out[-1]["role"] == role and (role == "me" or merge_them):
             out[-1]["text"] += "\n" + text
         else:
             out.append({"role": role, "text": text})
@@ -284,7 +288,8 @@ class CloneAgent:
         recent = [m for m in history[-40:] if isinstance(m, dict) and m.get("text")]
         if not recent:
             return ""
-        merged = _merge_history(recent)
+        is_group = "群" in chat or chat == "🐦🐦"
+        merged = _merge_history(recent, merge_them=not is_group)
         lines = []
         for m in merged:
             who = "我" if m.get("role") == "me" else "对方"
@@ -296,7 +301,7 @@ class CloneAgent:
         system = (
             f"{self.persona}\n\n"
             "现在你要用我的微信，替我回复最近这条消息。硬性要求：\n"
-            "- 回复要短：总共最多 2 句，尽量控制在 40 个汉字以内；\n"
+            "- 默认只写 1 句；只有对方一次问了两个问题时才写 2 句；尽量控制在 25 个汉字以内；\n"
             "- 结构：先回应对方的话；只有自然需要时才补一句反问，不要每句都反问；\n"
             "- 口语化、自然，像真人发微信；\n"
             "- 不要长篇大论、不要分点、不要解释、不要复述对方的话；\n"
@@ -563,9 +568,12 @@ class CloneAgent:
             except Exception:
                 pass
 
-        # 兜底：若模型还是写长了，按句号/问号切成最多 2 句
+        # 兜底：默认只保留第一句；对方一次问多个问题才留两句
         parts = re.split(r"(?<=[。！？!?])", reply)
         parts = [p.strip() for p in parts if p.strip()]
-        if len(parts) > 2:
-            reply = "".join(parts[:2])
+        if len(parts) > 1:
+            last_msg = str(recent[-1].get("text", ""))
+            q_count = last_msg.count("？") + last_msg.count("?")
+            parts = parts[:2] if q_count >= 2 else parts[:1]
+            reply = "".join(parts)
         return reply
