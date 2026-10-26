@@ -27,6 +27,13 @@ def _clean_reply(text: str) -> str:
     text = (text or "").strip()
     text = text.replace("\r", " ").replace("\n", " ")  # 微信回复不换行
     text = re.sub(r"\s+", " ", text).strip()
+    parts = text.split(" ")
+    if len(parts) > 1:
+        dedup: list[str] = []
+        for p in parts:
+            if not dedup or p != dedup[-1]:
+                dedup.append(p)
+        text = " ".join(dedup)
     text = re.sub(r"@[^\s，。！？!?]+", "", text)  # 微信回复默认不带 @
     text = re.sub(r"\s{2,}", " ", text).strip()
     text = text.strip("，,。.、；;：:！!？? ")  # 去掉开头/结尾的标点
@@ -564,7 +571,9 @@ class CloneAgent:
 
         # 防止复述对方刚说的话
         last_msg = str(recent[-1].get("text", "")).strip()
-        if reply and last_msg and _similar(reply, last_msg):
+        if reply and last_msg and (
+            reply.strip() == last_msg.strip() or _similar(reply, last_msg)
+        ):
             try:
                 retry = [
                     messages[0],
