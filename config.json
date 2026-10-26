@@ -4,7 +4,7 @@
     "chat_model": "qwen3.5:9b-q8_0-ctx8k",
     "embed_model": "bge-m3"
   },
-  "chat_reply_model": "clone-turns2",
+  "chat_reply_model": "clone-names",
   "chat_models": {},
   "history_topk": 4,
   "history_min_score": 0.6,
