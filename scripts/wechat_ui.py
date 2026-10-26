@@ -77,9 +77,15 @@ class App:
         # 左：设置（单聊/群聊统一白名单）
         self.lb_multi = self._list_editor(left, "白名单（单聊/群聊统一管理）", 0)
         self.lb_names = self._list_editor(left, "我的群昵称（识别 @我）", 1)
+        self.var_review = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            left,
+            text="复核模式（只在控制台显示，不自动发送）",
+            variable=self.var_review,
+        ).grid(row=2, column=0, sticky="w", pady=4)
 
         ttk.Button(left, text="保存设置", command=self._save).grid(
-            row=2, column=0, sticky="ew", pady=10
+            row=3, column=0, sticky="ew", pady=10
         )
 
         # 右：状态与控制
@@ -137,7 +143,7 @@ class App:
     def _list_editor(self, parent, title: str, row: int):
         lf = ttk.LabelFrame(parent, text=title)
         lf.grid(row=row, column=0, sticky="ew", pady=4)
-        lb = tk.Listbox(lf, height=3, exportselection=False)
+        lb = tk.Listbox(lf, height=10, exportselection=False)
         lb.pack(fill="both", expand=True)
         e = ttk.Entry(lf)
         e.pack(fill="x", pady=(4, 2))
@@ -169,10 +175,12 @@ class App:
             for v in src.get(key, []) or []:
                 lb.insert("end", v)
         self.cmb_chat["values"] = list(self.lb_multi.get(0, "end"))
+        self.var_review.set(bool(bc.get("review_mode", False)))
 
     def _save(self) -> None:
         bc = load_json(BOT_CONFIG, {})
         bc["multi_chats"] = list(self.lb_multi.get(0, "end"))
+        bc["review_mode"] = bool(self.var_review.get())
         save_json(BOT_CONFIG, bc)
         self.cmb_chat["values"] = list(self.lb_multi.get(0, "end"))
 

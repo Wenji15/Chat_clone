@@ -177,6 +177,11 @@ def main() -> int:
         pass
     ap = argparse.ArgumentParser()
     ap.add_argument("--live", action="store_true", help="真正回复")
+    ap.add_argument(
+        "--review",
+        action="store_true",
+        help="复核模式：只生成并显示回复，不发送",
+    )
     ap.add_argument("--interval", type=float, default=3.0)
     ap.add_argument("--once", action="store_true", help="只扫一轮")
     args = ap.parse_args()
@@ -189,6 +194,7 @@ def main() -> int:
         return 1
 
     bot_cfg = load_json(ROOT / "bot_config.json", {})
+    review = bool(bot_cfg.get("review_mode", False)) or bool(args.review)
     vlm_model = str(bot_cfg.get("vlm_model") or "")
     rules = load_json(ROOT / "wechat_rules.json", {})
     contacts = load_json(ROOT / "contacts.json", {})
@@ -300,6 +306,18 @@ def main() -> int:
             if not reply:
                 print(f"  [skip] 模型返回空回复：{agent.last_skip_reason or '未知原因'}")
                 break
+            if review:
+                print(f"  [review] {title!r} <- {reply!r}")
+                try:
+                    logdir = ROOT / "logs"
+                    logdir.mkdir(parents=True, exist_ok=True)
+                    with open(logdir / "review.log", "a", encoding="utf-8") as f:
+                        f.write(f"{time.strftime('%F %T')}\t{title}\t{reply}\n")
+                except Exception:
+                    pass
+                chats[title] = {"last_replied": last_text, "ts": time.time()}
+                save_json(state_path, state)
+                return "review"
             ws.send_reply(hwnd, reply)
             rounds += 1
             print(f"  [sent] {title!r} <- {reply!r}")
@@ -376,7 +394,9 @@ def main() -> int:
             target = match_whitelist(title, whitelist)
             # 只有 OCR 完全没读出来（空/单字）时才让视觉模型兜底；
             # 能读出名字但不是白名单的，直接静默跳过
-            if not target and vlm_model and len(title.strip()) <= 1:
+            if not target and vlm_model and (
+                len(title.strip()) <= 1 or "：" in title or ":" in title
+            ):
                 try:
                     vtitle = read_row_title(
                         agent.llm, img, d["y"], detect_chat_x0(img), vlm_model
