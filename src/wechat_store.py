@@ -48,29 +48,36 @@ def load_messages(chat: str) -> list[dict]:
 
 
 def append_messages(chat: str, msgs: list[dict]) -> int:
-    """追加消息，按 (role, text) 与最近 50 条做软去重，写回时按时间排序。
+    """追加消息，按 (ts, sender, text) 去重（无 ts 时退化为 (sender, text)）。
 
-    排序保证“旧消息在上、新消息在下”。
+    实时采集时同一屏会被多次识别，必须靠时间+发送人+内容三元组去重，
+    否则重复的“行/好/哈哈”会被误删或重复写入。
     """
     existing = load_messages(chat)
-    recent = {(m.get("role"), m.get("text")) for m in existing[-50:]}
+    seen = {
+        (str(m.get("ts") or ""), m.get("sender") or "", m.get("text") or "")
+        for m in existing
+    }
     all_msgs = list(existing)
     added = 0
     for m in msgs:
         text = (m.get("text") or "").strip()
         if not text:
             continue
-        key = (m.get("role"), text)
-        if key in recent:
+        ts = str(m.get("ts") or time.strftime("%Y-%m-%d %H:%M"))
+        key = (ts, m.get("sender") or "", text)
+        if key in seen:
             continue
         rec = {
-            "ts": m.get("ts") or time.strftime("%Y-%m-%d %H:%M"),
+            "ts": ts,
             "role": m.get("role"),          # me / them
             "sender": m.get("sender"),      # 具体发送人（群聊用）
             "text": text,
         }
+        if m.get("source"):
+            rec["source"] = m["source"]
         all_msgs.append(rec)
-        recent.add(key)
+        seen.add(key)
         added += 1
 
     all_msgs.sort(key=lambda m: str(m.get("ts", "")))

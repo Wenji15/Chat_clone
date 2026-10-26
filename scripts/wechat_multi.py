@@ -264,6 +264,17 @@ def main() -> int:
             history = ws.build_history(n_incoming, n_outgoing)
             print(f"  [collect] 又收到：{n_last_in[1]!r}")
 
+        # 实时入库（按 ts+sender+text 去重），有新消息就更新语料
+        try:
+            for m in history:
+                m.setdefault("source", "live")
+            added = append_messages(title, history)
+            if added:
+                export_markdown(title)
+                print(f"  [store] +{added} 条")
+        except Exception as e:
+            print(f"  [warn] 实时入库失败：{e}")
+
         is_group = title in groups or contacts.get(title, {}).get("type") == "group"
         if is_group:
             res = classify(agent, collected[-1], history_text(history), my_names, interests)
@@ -296,16 +307,49 @@ def main() -> int:
             print(f"  [dry] 会回复 {title!r}：{collected!r}")
             return "no_reply"
 
-        reply = agent.chat_reply(history, chat=title)
-        if not reply:
-            print("  [skip] 模型返回空回复")
-            return "no_reply"
-        ws.send_reply(hwnd, reply)
-        chats[title] = {"last_replied": collected[-1], "ts": time.time()}
-        save_json(state_path, state)
-        append_messages(title, history)
-        export_markdown(title)
-        print(f"  [sent] {title!r} <- {reply!r}")
+        rounds = 0
+        last_text = collected[-1]
+        while rounds < 3:
+            reply = agent.chat_reply(history, chat=title)
+            if not reply:
+                print("  [skip] 模型返回空回复")
+                break
+            ws.send_reply(hwnd, reply)
+            rounds += 1
+            print(f"  [sent] {title!r} <- {reply!r}")
+            chats[title] = {"last_replied": last_text, "ts": time.time()}
+            save_json(state_path, state)
+
+            # 跟聊：等 3 秒看有没有新消息；连续 2 次安静就收起
+            new_ctx = None
+            for _ in range(2):
+                time.sleep(3)
+                nxt = ws.analyze_once(engine, hwnd)
+                if nxt is None:
+                    continue
+                n_last_in, n_last_out, n_in, n_out, _t = nxt
+                if not n_last_in or n_last_in[1] == last_text:
+                    continue
+                if n_last_out is not None and n_last_in[0] <= n_last_out[0]:
+                    continue
+                last_text = n_last_in[1]
+                new_ctx = (n_in, n_out, n_last_in)
+                break
+            if new_ctx is None:
+                break
+            n_in, n_out, n_last_in = new_ctx
+            history = ws.build_history(n_in, n_out)
+            collected = [n_last_in[1]]
+            try:
+                for m in history:
+                    m.setdefault("source", "live")
+                added = append_messages(title, history)
+                if added:
+                    export_markdown(title)
+            except Exception:
+                pass
+            print(f"  [follow] 新消息：{n_last_in[1]!r}")
+
         return "replied"
 
     paused_logged = False

@@ -451,3 +451,46 @@ schtasks /Create /SC WEEKLY /D SUN /TN "AI_Clone_Retrain" ^
 | `_*.py` | 临时探针（红点/头像/分类测试），可删 | — |
 
 > 日常只需要：`run_ui.bat` 启动；采集用 `wechat_collect_history.py`；更新语料后跑 `auto_pipeline.py`。
+
+## 13. 实时采集与跟聊（P0）
+
+### 13.1 实时入库
+
+机器人每次 OCR 到消息后，**先写入语料库再决定是否回复**：
+
+```
+OCR → build_history → append_messages（去重）→ export_markdown → 分类/回复
+```
+
+- 去重键：`(ts, sender, text)`，没有时间戳时退化为 `(sender, text)`
+- 新消息带 `source: "live"`，与历史采集的 `collect` 区分
+- 只在新增加时导出 `chat.md`，不重复写盘
+
+### 13.2 跟聊循环
+
+回复后不再立即收起，而是：
+
+```
+发送 → 等 3 秒 → 重新 OCR
+  ├─ 有新消息 → 继续回复（最多 3 轮）
+  └─ 连续 2 次无新消息 → 收起聊天
+```
+
+- 最多 3 轮，防止和人"对刷"
+- 跟聊期间也会实时入库
+- 新消息判定：`最后一条 incoming 时间 > 最后一条 outgoing 时间`
+
+### 13.3 检索窗口
+
+`history` 检索只取：
+
+```json
+"history_days": 3,
+"history_max_messages": 999
+```
+
+- 先按 `ts` 过滤最近 3 天（无时间戳的保留）
+- 超过 999 条只取最近 999
+- 再做余弦 top-k（`history_topk` / `history_min_score` / `history_window`）
+
+> 效果：不会因为几个月前的旧消息干扰当前话题，也避免索引无限增长后检索变慢。

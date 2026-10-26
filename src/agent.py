@@ -267,6 +267,8 @@ class CloneAgent:
                     topk=int(self.cfg.get("history_topk", 5)),
                     min_score=float(self.cfg.get("history_min_score", 0.55)),
                     window=int(self.cfg.get("history_window", 1)),
+                    days=int(self.cfg.get("history_days", 3)),
+                    max_messages=int(self.cfg.get("history_max_messages", 999)),
                 )
             except Exception:
                 snippets = []

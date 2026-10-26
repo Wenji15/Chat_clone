@@ -1,7 +1,9 @@
 """抓取微信窗口并 OCR，用于校准坐标（消息区 / 输入框位置）。
 
 用法：
-    python scripts/wechat_capture.py [--title 微信]
+    python scripts/wechat_capture.py [--title 微信] [--keep]
+
+    --keep  保留截图（默认 OCR 完成后删除）
 
 实现：
   1. 找到微信主窗口；
@@ -140,6 +142,7 @@ def main() -> int:
         img = capture_foreground(hwnd)
         mode = "ImageGrab(foreground)"
 
+    keep = "--keep" in sys.argv
     img.save(OUT)
     print(f"已保存：{OUT}（{img.size[0]}x{img.size[1]}，方式={mode}）")
 
@@ -155,6 +158,13 @@ def main() -> int:
             xs = [p[0] for p in box]
             ys = [p[1] for p in box]
             print(f"[{score:.2f}] x={int(min(xs)):>4} y={int(min(ys)):>4} w={int(max(xs)-min(xs)):>4}  {text}")
+
+    if not keep:
+        try:
+            OUT.unlink(missing_ok=True)
+            print(f"已删除截图：{OUT.name}（加 --keep 可保留）")
+        except Exception as e:
+            print(f"[warn] 删除截图失败：{e}")
     return 0
 
 

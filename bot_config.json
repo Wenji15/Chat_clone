@@ -13,7 +13,8 @@
     "苏博",
     "Jerry",
     "敖民",
-    "冯自灏"
+    "冯自灏",
+    "『  楚韵氪堂  』湖北车友会3群"
   ],
   "vlm_model": "qwen2.5vl:3b-ctx",
   "log": "logs/wechat_bot.log"

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import math
+import time
 from pathlib import Path
 
 from .wechat_store import load_messages, safe_name, strip_parens
@@ -80,6 +81,8 @@ def retrieve(
     topk: int = 5,
     min_score: float = 0.55,
     window: int = 1,
+    days: int = 3,
+    max_messages: int = 999,
 ) -> list[dict]:
     if not query.strip():
         return []
@@ -89,8 +92,29 @@ def retrieve(
         return []
     if not data.get("vectors"):
         return []
+    texts = data["texts"]
+    meta = data["meta"]
+
+    # 时间窗 + 条数上限：只看最近 N 天、最多 M 条
+    idxs = list(range(len(texts)))
+    if days and days > 0:
+        cutoff = time.time() - days * 86400
+        kept: list[int] = []
+        for i in idxs:
+            raw = str(meta[i].get("ts") or "")
+            try:
+                t = time.mktime(time.strptime(raw[:16], "%Y-%m-%d %H:%M"))
+            except Exception:
+                kept.append(i)  # 没时间戳的保留
+                continue
+            if t >= cutoff:
+                kept.append(i)
+        idxs = kept
+    if max_messages and len(idxs) > max_messages:
+        idxs = idxs[-max_messages:]
+
     q = client.embed([query])[0]
-    scored = [(_cos(q, v), i) for i, v in enumerate(data["vectors"])]
+    scored = [(_cos(q, data["vectors"][i]), i) for i in idxs]
     scored.sort(reverse=True)
 
     picked: list[tuple[float, int]] = []
@@ -98,14 +122,12 @@ def retrieve(
     for score, i in scored:
         if score < min_score or len(picked) >= topk:
             break
-        text = data["texts"][i]
+        text = texts[i]
         if text in seen:
             continue
         seen.add(text)
         picked.append((score, i))
 
-    texts = data["texts"]
-    meta = data["meta"]
     used: set[int] = set()
     blocks: list[dict] = []
     for score, i in picked:
