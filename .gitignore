@@ -33,3 +33,4 @@ _screen*.png
 logs/
 PAUSE
 STOP
+STOP_COLLECT
