@@ -61,6 +61,7 @@ class CloneAgent:
         self.persona = self._load_persona()
         # web/RAG 问答是否开启 thinking（微信回复由 chat_native 单独控制）
         self.llm.think_default = bool(cfg.get("thinking_answer", False))
+        self.llm.num_ctx = int(cfg.get("num_ctx", 8192))
         self.kb = KnowledgeBase(root / cfg["vector_store_file"])
         self.memory = LongTermMemory(root / cfg["memory_file"])
         self.top_k = int(cfg.get("top_k", 4))

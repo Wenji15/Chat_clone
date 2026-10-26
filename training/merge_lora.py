@@ -17,9 +17,9 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="Qwen/Qwen2.5-7B-Instruct")
-    ap.add_argument("--adapter", default="training/output")
-    ap.add_argument("--output", default="training/merged")
+    ap.add_argument("--model", default="training/models/Qwen2.5-7B-Instruct")
+    ap.add_argument("--adapter", default="training/output-all")
+    ap.add_argument("--output", default="training/merged-all")
     args = ap.parse_args()
 
     model = AutoModelForCausalLM.from_pretrained(

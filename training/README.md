@@ -18,7 +18,7 @@ $env:HF_ENDPOINT="https://hf-mirror.com"
 ```
 
 > RTX 5070 Ti 16G：默认 7B + 4bit QLoRA 就够用。
-> 8G 显存：`--model Qwen/Qwen2.5-3B-Instruct`。
+> 8G 显存：先下载 `Qwen/Qwen2.5-3B-Instruct`，再用 `--model` 指向本地目录。
 
 ## 1. 准备数据
 
@@ -38,7 +38,7 @@ data/finetune/sft_all_train.jsonl  # 训练集（90%）
 data/finetune/sft_all_val.jsonl    # 验证集（10%）
 ```
 
-> 当前群里 725 条样本（train 652 / val 73）。"只学我"只有 16 条，**样本太少，不建议单独微调**。
+> 当前语料约 2745 条，全量 SFT 2621 条（train 2358 / val 263）；"只学我" 477 条。
 
 ## 2. 训练
 
@@ -47,15 +47,15 @@ python training/train_lora.py `
   --model training\models\Qwen2.5-7B-Instruct `
   --data data/finetune/sft_all_train.jsonl `
   --val data/finetune/sft_all_val.jsonl `
-  --output training\output-v3 `
-  --epochs 2 --lr 1.5e-4
+  --output training\output-all `
+  --epochs 2 --lr 1.2e-4
 ```
 
 v2 起的关键改进：
 
 - **assistant-only loss**：只对"回复"算 loss，不再背上下文（避免吐出一整段聊天记录）
 - **场景化 system**：`你正在扮演「X」。场景：微信群「Y」，正在和「Z」等人聊天。`
-- **防过拟合**：`lr 1.5e-4`、LoRA dropout 0.1、weight decay 0.01、cosine 调度
+- **防过拟合**：`lr 1.2e-4`、LoRA dropout 0.1、weight decay 0.01、cosine 调度
 - **学会停**：`<|im_end|>` 放在 `{% generation %}` 掩码内
 
 > 如果 loss 后期掉到 1 以下、eval loss 反而上升，就是过拟合，减少 epoch 或加数据。
@@ -64,9 +64,9 @@ v2 起的关键改进：
 
 ```powershell
 python training/merge_lora.py `
-  --model Qwen/Qwen2.5-3B-Instruct `
-  --adapter training/output `
-  --output training/merged
+  --model training\models\Qwen2.5-7B-Instruct `
+  --adapter training/output-all `
+  --output training/merged-all
 ```
 
 ## 4. 转成 GGUF 并导入 Ollama
@@ -76,15 +76,15 @@ python training/merge_lora.py `
 curl.exe -L "https://ghproxy.net/https://github.com/ggerganov/llama.cpp/archive/refs/heads/master.zip" -o llama.zip
 Expand-Archive llama.zip -DestinationPath . -Force
 
-# 转为 q4_k_m GGUF
-python llama.cpp-master\convert_hf_to_gguf.py training\merged --outfile training\merged.gguf --outtype q4_k_m
+# 转 q8_0 GGUF（转换脚本只支持 f16/bf16/q8_0）
+python llama.cpp-master\convert_hf_to_gguf.py training\merged-all --outfile training\merged-all-q8.gguf --outtype q8_0
 
-# 导入 Ollama（Modelfile 已写好）
-ollama create clone-richer -f training\Modelfile
-ollama run clone-richer
+# 导入 Ollama（clone-all.Modelfile 指向 merged-all-q8.gguf）
+ollama create clone-all -f training\clone-all.Modelfile
+ollama run clone-all
 ```
 
-然后在 `config.json` 里把 `chat_model` 改成 `clone-richer`，分身就会用微调后的模型。
+然后在 `config.json` 里把 **`chat_reply_model`** 改成 `clone-all`（回复走微调模型，分类/意图仍用基础模型）。
 
 ## 5. 效果验证
 

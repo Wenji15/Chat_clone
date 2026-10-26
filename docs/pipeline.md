@@ -1,5 +1,9 @@
 # 个人分身：完整流程与原理
 
+> ⚠️ **免责声明**
+> 本项目通过非官方接口/模拟操作控制微信，**违反微信用户协议，存在封号风险**。
+> **禁止在日常微信号上测试**，请使用小号/测试号，仅作编程技术学习参考，使用后果自负。
+
 > 从微信聊天记录 → 语料 → RAG / 微调 → 微信自动回复，全链路说明。
 
 ## 1. 当前架构（最新）
@@ -8,8 +12,8 @@
 
 | 用途 | 模型 | 上下文 | 说明 |
 |------|------|--------|------|
-| 微信回复 / 意图 / 分类 | `qwen3.5:9b-ctx32k` | 32k | 基础模型，think 关闭 |
-| web/RAG 问答 | 同上 | 32k | think 可开（`thinking_answer`） |
+| 微信回复 / 意图 / 分类 | `qwen3.5:9b-q8_0-ctx8k` | 8k | 基础模型，think 关闭 |
+| web/RAG 问答 | 同上 | 8k | think 可开（`thinking_answer`） |
 | 回复口吻（可选） | `clone-all`（微调） | — | 训练完由 `chat_reply_model` 指定 |
 | 红点行兜底识别 | `qwen2.5vl:3b-ctx` | 4k | 仅 OCR 读不出标题时调用 |
 | 历史检索 / RAG | `bge-m3` | — | 向量嵌入 |
@@ -43,7 +47,7 @@
 | 回复 | ~0.6s |
 | 冷启动（首次加载） | ~8s |
 
-> 提速关键：`think:false` + `num_ctx 32k` + `keep_alive 30m` + 启动预热。
+> 提速关键：`think:false` + `num_ctx 8k` + `keep_alive 30m` + 启动预热。
 
 ## 2. 目录结构
 
@@ -168,6 +172,11 @@ python scripts\query.py "闫总是谁"        # 检索 + 回答
 | **assistant-only loss** | 只对回复算 loss；否则模型会背上下文，输出“田政：红烧肉”这种整段对话 |
 | **`{% generation %}` 模板** | 让 trl 精确定位回复段（含 `<|im_end|>`，学会停） |
 
+> **SYSTEM 提示词说明**：`training/*.Modelfile` 里的 `SYSTEM` 只对 `ollama run` 生效；
+> 经 `agent.chat_reply` 调用时会被 `persona.md` + 画像覆盖，所以 Modelfile 里不再写死。
+> 训练时的 system 是「你正在扮演「X」。场景：…」，推理时是 persona + 硬规则，
+> 两者不完全一致（已知问题，后续可统一重建）。
+
 ### 5.3 防过拟合参数
 
 | 参数 | 值 | 说明 |
@@ -190,13 +199,13 @@ python scripts\query.py "闫总是谁"        # 检索 + 回答
 python scripts\export_sft.py --all
 
 # 2) 训练（16G 显存：7B + 4bit QLoRA）
-python training\train_lora.py --model training\models\Qwen2.5-7B-Instruct --epochs 2 --lr 1.5e-4
+python training\train_lora.py --model training\models\Qwen2.5-7B-Instruct --epochs 2 --lr 1.2e-4
 
 # 3) 合并
-python training\merge_lora.py --model training\models\Qwen2.5-7B-Instruct --adapter training\output-v3 --output training\merged-v3
+python training\merge_lora.py --model training\models\Qwen2.5-7B-Instruct --adapter training\output-all --output training\merged-all
 
 # 4) 转 GGUF（q8_0，约 8GB）
-python training\convert_hf_to_gguf.py training\merged-v3 --outfile training\merged-v3-q8.gguf --outtype q8_0
+python training\convert_hf_to_gguf.py training\merged-all --outfile training\merged-all-q8.gguf --outtype q8_0
 
 # 5) 导入 Ollama
 ollama create clone-richer-v3 -f training\Modelfile
@@ -364,7 +373,7 @@ schtasks /Create /SC WEEKLY /D SUN /TN "AI_Clone_Retrain" ^
 | 变更 | 说明 |
 |------|------|
 | 回复模型切换 | `clone-richer-v3`（复读）→ 基础模型 + 画像 + 历史检索 + 风格示例 |
-| 提速 | 原生 `/api/chat`、`think:false`、`num_ctx 32k`、`keep_alive 30m`、启动预热；回复从 30–70s 降到 ~1.2s |
+| 提速 | 原生 `/api/chat`、`think:false`、`num_ctx 8k`、`keep_alive 30m`、启动预热；回复从 30–70s 降到 ~1.2s |
 | 联系人画像 | `build_profiles.py` 生成性格/关系/态度/经历；`chat_reply` 注入 |
 | 历史检索 | `wechat_history_rag.py` 按会话向量检索 top-3；增量索引 |
 | 意图分析 | 增加 `topic`、`调侃/玩笑`、`addressed_to_me`（含“这个AI/学长”） |

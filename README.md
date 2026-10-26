@@ -1,5 +1,9 @@
 # 我的个人分身（AI Clone）
 
+> ⚠️ **免责声明**
+> 本项目通过非官方接口/模拟操作控制微信，**违反微信用户协议，存在封号风险**。
+> **禁止在日常微信号上测试**，请使用小号/测试号，仅作编程技术学习参考，使用后果自负。
+
 一个**本地运行、隐私可控**的个人 AI 分身骨架，覆盖你想要的三大能力：
 
 | 能力 | 实现方式 | 对应文件 |
@@ -155,12 +159,12 @@ python scripts/query.py "闫总是谁"
 ```powershell
 python scripts/export_sft.py --all          # 导出训练样本
 pip install -r training/requirements.txt    # 装训练依赖（torch 等）
-python training/train_lora.py --model Qwen/Qwen2.5-3B-Instruct
-python training/merge_lora.py --model Qwen/Qwen2.5-3B-Instruct
+python training/train_lora.py --model training\models\Qwen2.5-7B-Instruct --epochs 2 --lr 1.2e-4
+python training/merge_lora.py --model training\models\Qwen2.5-7B-Instruct --adapter training\output-all --output training\merged-all
 # 转 GGUF 后用 ollama create 导入
 ```
 
-> 8G 显存用 3B + 4bit QLoRA；12G+ 可换 7B。数据量少时先别微调，RAG 更划算。
+> 16G 显存用 7B + 4bit QLoRA；8G 显存可换 3B。数据量少时先别微调，RAG 更划算。
 
 ## 隐私提示
 

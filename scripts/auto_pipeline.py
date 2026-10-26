@@ -5,7 +5,7 @@
 用法：
     python scripts/auto_pipeline.py              # 导出 + 重建 RAG
     python scripts/auto_pipeline.py --train      # 全量：训练 + 合并 + 转换 + 导入
-    python scripts/auto_pipeline.py --train --epochs 1
+    python scripts/auto_pipeline.py --train --epochs 2
 """
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def main() -> int:
     ap.add_argument("--train", action="store_true", help="包含重训与模型更新")
     ap.add_argument("--model", default=str(ROOT / "training" / "models" / "Qwen2.5-7B-Instruct"))
     ap.add_argument("--epochs", type=float, default=2)
-    ap.add_argument("--lr", type=float, default=1.5e-4)
+    ap.add_argument("--lr", type=float, default=1.2e-4)
     ap.add_argument("--skip-ingest", action="store_true", help="跳过重建 RAG")
     args = ap.parse_args()
 

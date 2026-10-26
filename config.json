@@ -1,7 +1,7 @@
 {
   "ollama": {
     "base_url": "http://127.0.0.1:11434",
-    "chat_model": "qwen3.5:9b-q8_0-ctx32k",
+    "chat_model": "qwen3.5:9b-q8_0-ctx8k",
     "embed_model": "bge-m3"
   },
   "chat_reply_model": "",
@@ -9,6 +9,7 @@
   "history_topk": 4,
   "history_min_score": 0.6,
   "history_window": 2,
+  "num_ctx": 8192,
   "thinking": false,
   "thinking_answer": true,
   "persona_file": "persona.md",

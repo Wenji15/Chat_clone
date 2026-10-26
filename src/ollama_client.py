@@ -101,7 +101,7 @@ class OllamaClient:
         model: str | None = None,
         temperature: float = 0.7,
         think: bool = False,
-        num_ctx: int = 32768,
+        num_ctx: int | None = None,
         keep_alive: str = "30m",
     ) -> str:
         """Ollama 原生 /api/chat：可关闭 thinking、限制上下文、保持常驻。"""
@@ -111,7 +111,10 @@ class OllamaClient:
             "stream": False,
             "think": think,
             "keep_alive": keep_alive,
-            "options": {"temperature": temperature, "num_ctx": num_ctx},
+            "options": {
+                "temperature": temperature,
+                "num_ctx": num_ctx or getattr(self, "num_ctx", 8192),
+            },
         }
         result = self._post("/api/chat", payload)
         return str((result.get("message") or {}).get("content", ""))
