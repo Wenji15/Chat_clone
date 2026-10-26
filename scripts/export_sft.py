@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import re
 import sys
 import time
 from pathlib import Path
@@ -66,6 +67,17 @@ def main() -> int:
         action="store_true",
         help="按轮次导出时，在每轮前加 [发送者]（群聊推荐）",
     )
+    ap.add_argument(
+        "--mix-context",
+        action="store_true",
+        help="短/中/长上下文按 40/35/25 混合（否则固定 4 轮）",
+    )
+    ap.add_argument(
+        "--gap-ratio",
+        type=float,
+        default=0.0,
+        help="构造 @ 定向回复样本的比例（0-1）",
+    )
     args = ap.parse_args()
 
     persona = ""
@@ -107,7 +119,21 @@ def main() -> int:
                         continue
                     if target.count("@") >= 3 and len(target) < 40:
                         continue
-                    ctx = turns[max(0, i - 4) : i]
+                    k = 4
+                    if args.mix_context:
+                        k = random.choices([2, 6, 12], weights=[40, 35, 25])[0]
+                    if args.gap_ratio > 0 and random.random() < args.gap_ratio:
+                        m = re.search(r"@([\u4e00-\u9fa5A-Za-z0-9_]+)", target)
+                        if m:
+                            name = m.group(1)
+                            ref = None
+                            for j in range(i - 1, max(0, i - 12) - 1, -1):
+                                if turns[j].get("sender") == name:
+                                    ref = j
+                                    break
+                            if ref is not None and i - ref >= 2:
+                                k = max(k, i - ref + 2)
+                    ctx = turns[max(0, i - k) : i]
                     if not ctx:
                         continue
                     gap = 0.0
