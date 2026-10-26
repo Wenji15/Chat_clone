@@ -58,10 +58,11 @@ def _load_names() -> tuple[set[str], dict[str, str]]:
                 std, rest = line.split("|", 1)
                 std = _norm_name(std)
                 names.add(std)
-                for a in rest.split(","):
+                for a in re.split(r"[|,，]", rest):
                     a = _norm_name(a)
                     if a:
                         alias[a] = std
+                        alias[a.lower()] = std
             else:
                 names.add(_norm_name(line))
     _NAMES_CACHE = (names, alias)
@@ -78,8 +79,13 @@ def clean_sender(name: str) -> str:
     names, alias = _load_names()
     if s in alias:
         return alias[s]
+    if s.lower() in alias:
+        return alias[s.lower()]
     if s in names:
         return s
+    lower_names = {n.lower(): n for n in names}
+    if s.lower() in lower_names:
+        return lower_names[s.lower()]
     if s in _SYSTEM_NAMES:
         return ""
     if any(k in s for k in ("公众号", "小程序", "视频号", "文件传输", "微信团队", "客服")):
@@ -91,6 +97,14 @@ def clean_sender(name: str) -> str:
     hit = difflib.get_close_matches(s, names, n=1, cutoff=0.85) if names else []
     if hit:
         return hit[0]
+    # 明显是句子/系统提示的，不当人名
+    if re.search(r"[的了呢吧啊呀哦嘛]$", s):
+        return ""
+    if any(
+        k in s
+        for k in ("需要", "确认", "为准", "详情", "生效", "调查", "赛季", "会员", "费用")
+    ):
+        return ""
     if re.fullmatch(r"[\u4e00-\u9fa5A-Za-z·（）]{1,8}", s):
         return s
     return ""
