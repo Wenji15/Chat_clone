@@ -301,8 +301,16 @@ class CloneAgent:
             who = "我" if m.get("role") == "me" else "对方"
             lines.append(f"{who}：{str(m.get('text', '')).strip()}")
         convo = "\n".join(lines)
-        style_examples = self._style_examples(chat)
-        profile = load_profile(self.root, chat) if chat else ""
+        style_examples = (
+            self._style_examples(chat)
+            if bool(self.cfg.get("style_examples_enabled", True))
+            else []
+        )
+        profile = (
+            load_profile(self.root, chat)
+            if chat and bool(self.cfg.get("profile_enabled", True))
+            else ""
+        )
 
         system = (
             f"{self.persona}\n\n"

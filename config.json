@@ -10,6 +10,8 @@
   "history_min_score": 0.6,
   "history_window": 2,
   "history_enabled": false,
+  "profile_enabled": false,
+  "style_examples_enabled": false,
   "history_days": 3,
   "history_max_messages": 999,
   "gap_threshold_minutes": 30,
