@@ -322,6 +322,7 @@ def main() -> int:
     engine = RapidOCR()
     screens: list[list[dict]] = []
     seen: set[tuple[str, str]] = set()
+    no_new = 0
     for i in range(args.screens):
         if (ROOT / "STOP_COLLECT").exists():
             try:
@@ -344,12 +345,21 @@ def main() -> int:
         screens.append(msgs)
         print(f"[{i}] {len(msgs)} 条（新增 {len(new)}）")
         if i > 0 and not new:
-            print("没有新消息，停止（可能已到底部）")
-            break
+            no_new += 1
+            if no_new >= 2:
+                print("连续两屏没有新消息，停止（可能已到底部）")
+                break
+            print("本屏无新消息，用 PageDown 兜底")
+            pyautogui.press("pagedown")
+            time.sleep(1.0)
+            continue
+        no_new = 0
+        # 确保鼠标在消息列表上，滚轮事件才会送到列表
+        pyautogui.moveTo(left + int(w * 0.5), top + int(h * 0.6))
         for _ in range(args.step):
             pyautogui.scroll(-1)
-            time.sleep(0.03)
-        time.sleep(0.6)
+            time.sleep(0.04)
+        time.sleep(0.8)
 
     if not any(screens):
         print("没有采集到任何消息")
