@@ -30,7 +30,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from src.agent import CloneAgent  # noqa: E402
 from src.config_loader import load_config  # noqa: E402
-from src.wechat_store import append_messages, export_markdown, load_messages  # noqa: E402
+from src.wechat_store import load_messages  # noqa: E402
 from src.wechat_unread import detect_unread  # noqa: E402
 from src.wechat_win import capture, find_wechat_hwnd, set_dpi_aware, window_rect  # noqa: E402
 from src.wechat_layout import detect_chat_x0, detect_chat_x0_ex  # noqa: E402
@@ -283,17 +283,6 @@ def main() -> int:
         except Exception:
             gap_minutes = None
 
-        # 实时入库（按 ts+sender+text 去重），有新消息就更新语料
-        try:
-            for m in history:
-                m.setdefault("source", "live")
-            added = append_messages(title, history)
-            if added:
-                export_markdown(title)
-                print(f"  [store] +{added} 条")
-        except Exception as e:
-            print(f"  [warn] 实时入库失败：{e}")
-
         if not args.live:
             print(f"  [dry] 会回复 {title!r}：{collected!r}")
             return "no_reply"
@@ -344,14 +333,6 @@ def main() -> int:
             n_in, n_out, n_last_in = new_ctx
             history = ws.build_history(n_in, n_out)
             collected = [n_last_in[1]]
-            try:
-                for m in history:
-                    m.setdefault("source", "live")
-                added = append_messages(title, history)
-                if added:
-                    export_markdown(title)
-            except Exception:
-                pass
             print(f"  [follow] 新消息：{n_last_in[1]!r}")
 
         return "replied" if rounds else "no_reply"

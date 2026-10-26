@@ -25,6 +25,8 @@ from .wechat_store import is_group_name
 def _clean_reply(text: str) -> str:
     """折叠复读、限制 @ 数量，避免微调模型输出“@某人@某人…”刷屏。"""
     text = (text or "").strip()
+    text = text.replace("\r", " ").replace("\n", " ")  # 微信回复不换行
+    text = re.sub(r"\s+", " ", text).strip()
     text = re.sub(r"(.{1,12}?)\1{3,}", r"\1", text)  # 连续重复片段只留一次
     if text.count("@") > 2:  # 最多保留 2 个 @
         idx = -1
@@ -335,7 +337,7 @@ class CloneAgent:
                 "不要强行衔接旧内容。）"
             )
         snippets: list = []
-        if chat:
+        if chat and bool(self.cfg.get("history_enabled", True)):
             try:
                 from .wechat_history_rag import retrieve
 
