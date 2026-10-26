@@ -354,7 +354,12 @@ def main() -> int:
             time.sleep(1.0)
             continue
         no_new = 0
-        # 确保鼠标在消息列表上，滚轮事件才会送到列表
+        # 确保窗口在前台、鼠标在消息列表上，滚轮事件才会送到列表
+        try:
+            user32.SetForegroundWindow(hwnd)
+        except Exception:
+            pass
+        time.sleep(0.1)
         pyautogui.moveTo(left + int(w * 0.5), top + int(h * 0.6))
         for _ in range(args.step):
             pyautogui.scroll(-1)
