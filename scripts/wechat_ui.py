@@ -104,6 +104,12 @@ class App:
             rowf, from_=1, to=20, textvariable=self.var_burst_count, width=4
         ).pack(side="left", padx=2)
         self.var_burst_text = tk.StringVar(value="测试 {i}")
+        self.var_burst_gen = tk.BooleanVar(value=True)
+        ttk.Checkbutton(
+            burst,
+            text="用模型生成内容（忽略下面的固定文本）",
+            variable=self.var_burst_gen,
+        ).pack(anchor="w", padx=4)
         ttk.Entry(burst, textvariable=self.var_burst_text).pack(
             fill="x", padx=4, pady=2
         )
@@ -389,17 +395,20 @@ class App:
         text = self.var_burst_text.get().strip() or "测试 {i}"
         STOP_BURST.unlink(missing_ok=True)
         self._log(f"=== 连续发送 {count} 条 -> {chat} ===\n")
+        cmd = [
+            sys.executable,
+            str(BURST),
+            "--chat",
+            chat,
+            "--count",
+            str(count),
+            "--text",
+            text,
+        ]
+        if self.var_burst_gen.get():
+            cmd.append("--generate")
         self.burst_proc = subprocess.Popen(
-            [
-                sys.executable,
-                str(BURST),
-                "--chat",
-                chat,
-                "--count",
-                str(count),
-                "--text",
-                text,
-            ],
+            cmd,
             cwd=str(ROOT),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,

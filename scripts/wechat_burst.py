@@ -19,6 +19,8 @@ from rapidocr_onnxruntime import RapidOCR  # noqa: E402
 
 import wechat_screener as ws  # noqa: E402
 from wechat_multi import list_titles  # noqa: E402
+from src.agent import CloneAgent  # noqa: E402
+from src.config_loader import load_config  # noqa: E402
 from src.wechat_win import (  # noqa: E402
     capture,
     find_wechat_hwnd,
@@ -36,6 +38,11 @@ def main() -> int:
     ap.add_argument("--count", type=int, default=5)
     ap.add_argument("--interval", type=float, default=3.0)
     ap.add_argument("--text", default="测试 {i}")
+    ap.add_argument(
+        "--generate",
+        action="store_true",
+        help="用对话模型生成内容（根据当前窗口），而不是固定文本",
+    )
     args = ap.parse_args()
 
     count = max(1, min(MAX_COUNT, args.count))
@@ -70,12 +77,38 @@ def main() -> int:
         print(f"[burst] 已打开：{title!r}")
 
     STOP.unlink(missing_ok=True)
+    agent = None
+    if args.generate:
+        agent = CloneAgent(load_config(), ROOT)
+        try:
+            agent.llm.chat_native(
+                [{"role": "user", "content": "ping"}], temperature=0.0
+            )
+            print("[burst] 回复模型已加载")
+        except Exception as e:
+            print(f"[burst] 模型预热失败：{e}")
+
     for i in range(1, count + 1):
         if STOP.exists():
             STOP.unlink(missing_ok=True)
             print("[burst] 收到停止")
             break
-        msg = args.text.replace("{i}", str(i))
+        if args.generate and agent:
+            got = ws.analyze_once(engine, hwnd)
+            msg = ""
+            if got:
+                _li, _lo, incoming, outgoing, _t = got
+                msg = (
+                    agent.chat_reply(ws.build_history(incoming, outgoing), chat=args.chat)
+                    or ""
+                )
+            if not msg:
+                print(
+                    f"[burst] 模型返回空（{agent.last_skip_reason or '无'}），停止"
+                )
+                break
+        else:
+            msg = args.text.replace("{i}", str(i))
         ws.send_reply(hwnd, msg)
         print(f"[burst] {i}/{count} -> {msg!r}")
         time.sleep(max(0.5, args.interval))
