@@ -29,6 +29,7 @@ import wechat_screener as ws  # noqa: E402
 from src.wechat_store import (  # noqa: E402
     append_messages,
     chat_dir,
+    clean_sender,
     export_markdown,
     load_messages,
     safe_name,
@@ -128,6 +129,10 @@ def parse_history(
         ),
         key=lambda i: i["y0"],
     )
+    # 过滤掉长地址/公众号/数字之类的伪人名
+    for s in senders:
+        s["clean"] = clean_sender(s["text"])
+    senders = [s for s in senders if s["clean"]]
     contents = [it for it in items if it["dark"] <= 120 and not it["ts"]]
     UI_NOISE = ("定位到聊天位置",)
 
@@ -151,7 +156,7 @@ def parse_history(
         ]
         if cand:
             s = max(cand, key=lambda x: x["y0"])
-            sender = s["text"]
+            sender = s["clean"]
             sy = s["y0"]
         elif last_sender:
             sender = last_sender

@@ -12,6 +12,7 @@ data/raw/wechat/
 data/avatars/
 data/profiles/
 data/entity_notes.json
+data/people/
 data/bot_state.json
 data/entity_cache.json
 

@@ -25,7 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from src.wechat_store import STORE, load_messages  # noqa: E402
+from src.wechat_store import STORE, clean_sender, load_messages  # noqa: E402
 
 
 def _parse_ts(s):
@@ -42,7 +42,7 @@ def merge_turns(msgs: list[dict]) -> list[dict]:
         text = (m.get("text") or "").strip()
         if not text:
             continue
-        sender = m.get("sender") or ""
+        sender = clean_sender(m.get("sender") or "")
         ts = m.get("ts")
         if turns and turns[-1]["sender"] == sender:
             turns[-1]["text"] += "\n" + text
@@ -61,12 +61,31 @@ def main() -> int:
         action="store_true",
         help="按轮次导出：合并连续同人、不标注发言人、带时间间隔",
     )
+    ap.add_argument(
+        "--names",
+        action="store_true",
+        help="按轮次导出时，在每轮前加 [发送者]（群聊推荐）",
+    )
     args = ap.parse_args()
 
     persona = ""
     p = ROOT / "persona.md"
     if p.exists():
         persona = p.read_text(encoding="utf-8").strip()
+
+    me_names: set[str] = set()
+    if args.names:
+        try:
+            rules = json.loads(
+                (ROOT / "wechat_rules.json").read_text(encoding="utf-8")
+            )
+            me_names = {
+                clean_sender(n)
+                for n in (rules.get("my_names") or [])
+                if clean_sender(n)
+            }
+        except Exception:
+            me_names = set()
 
     samples: list[dict] = []
     if STORE.exists():
@@ -95,7 +114,17 @@ def main() -> int:
                     a, b = _parse_ts(ctx[-1].get("end")), _parse_ts(t.get("start"))
                     if a and b:
                         gap = b - a
-                    user_lines = [c["text"] for c in ctx]
+                    user_lines = []
+                    for c in ctx:
+                        if args.names:
+                            who = (
+                                "我"
+                                if c["sender"] in me_names
+                                else (c["sender"] or "未知")
+                            )
+                            user_lines.append(f"[{who}] {c['text']}")
+                        else:
+                            user_lines.append(c["text"])
                     if gap > 1800:
                         user_lines.append(f"（距上条 {int(gap // 60)} 分钟）")
                     samples.append(

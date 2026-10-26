@@ -28,6 +28,74 @@ def strip_parens(name: str) -> str:
     return re.sub(r"[（(][^)）]*[)）]", "", name or "").strip()
 
 
+_SYSTEM_NAMES = {
+    "拍即传", "微信团队", "服务号", "订阅号", "文件传输助手", "小程序",
+    "视频号", "微信支付", "腾讯新闻", "群助手", "微信运动",
+}
+_NAMES_CACHE: tuple[set[str], dict[str, str]] | None = None
+
+
+def _norm_name(name: str) -> str:
+    s = re.sub(r"\s+", "", name or "")
+    s = s.replace("(", "（").replace(")", "）")
+    return s.strip("：:。，,、")
+
+
+def _load_names() -> tuple[set[str], dict[str, str]]:
+    """读取 data/people/names.txt：每行“标准名”或“标准名|别名1,别名2”。"""
+    global _NAMES_CACHE
+    if _NAMES_CACHE is not None:
+        return _NAMES_CACHE
+    names: set[str] = set()
+    alias: dict[str, str] = {}
+    p = ROOT / "data" / "people" / "names.txt"
+    if p.exists():
+        for line in p.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "|" in line:
+                std, rest = line.split("|", 1)
+                std = _norm_name(std)
+                names.add(std)
+                for a in rest.split(","):
+                    a = _norm_name(a)
+                    if a:
+                        alias[a] = std
+            else:
+                names.add(_norm_name(line))
+    _NAMES_CACHE = (names, alias)
+    return _NAMES_CACHE
+
+
+def clean_sender(name: str) -> str:
+    """清洗发送人名：去编号/标点、归一别名、拒绝长句/系统名/数字名。"""
+    s = _norm_name(name)
+    s = re.sub(r"^\d{1,3}[.、]", "", s)
+    s = s.strip("：:。，,、")
+    if not s:
+        return ""
+    names, alias = _load_names()
+    if s in alias:
+        return alias[s]
+    if s in names:
+        return s
+    if s in _SYSTEM_NAMES:
+        return ""
+    if any(k in s for k in ("公众号", "小程序", "视频号", "文件传输", "微信团队", "客服")):
+        return ""
+    if len(s) > 8:
+        return ""
+    import difflib
+
+    hit = difflib.get_close_matches(s, names, n=1, cutoff=0.85) if names else []
+    if hit:
+        return hit[0]
+    if re.fullmatch(r"[\u4e00-\u9fa5A-Za-z·（）]{1,8}", s):
+        return s
+    return ""
+
+
 def chat_dir(chat: str) -> Path:
     d = STORE / safe_name(chat)
     d.mkdir(parents=True, exist_ok=True)
@@ -95,7 +163,7 @@ def append_messages(chat: str, msgs: list[dict]) -> int:
             "seq": max_seq,
             "ts": ts,
             "role": m.get("role"),          # me / them
-            "sender": m.get("sender"),      # 具体发送人（群聊用）
+            "sender": clean_sender(m.get("sender")) or None,
             "text": text,
         }
         if m.get("source"):
