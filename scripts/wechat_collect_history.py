@@ -28,6 +28,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import wechat_screener as ws  # noqa: E402
 from src.wechat_store import (  # noqa: E402
     append_messages,
+    chat_dir,
     export_markdown,
     load_messages,
     safe_name,
@@ -245,6 +246,11 @@ def main() -> int:
     ap.add_argument("--chat", type=str, default="", help="先搜索并打开这个会话")
     ap.add_argument("--auto-open", action="store_true", help="自动打开聊天记录窗口")
     ap.add_argument("--no-raw", action="store_true")
+    ap.add_argument(
+        "--rebuild",
+        action="store_true",
+        help="先备份并清空该会话数据，再重新采集（修复顺序）",
+    )
     args = ap.parse_args()
     args.step = max(4, min(20, args.step))
 
@@ -336,6 +342,14 @@ def main() -> int:
             if all_msgs and all_msgs[-1]["role"] == m["role"] and all_msgs[-1]["text"] == m["text"]:
                 continue
             all_msgs.append(m)
+
+    if args.rebuild:
+        d = chat_dir(chat_name)
+        p = d / "messages.jsonl"
+        if p.exists():
+            bak = d / f"messages.{time.strftime('%Y%m%d-%H%M%S')}.bak"
+            p.replace(bak)
+            print(f"[rebuild] 旧数据已备份：{bak.name}")
 
     added = append_messages(chat_name, all_msgs)
     md = export_markdown(chat_name)
