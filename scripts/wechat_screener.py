@@ -337,7 +337,10 @@ def main() -> int:
                 reply = get_agent().chat_reply(build_history(incoming, outgoing), chat=title)
                 log(f"→ 回复：{reply!r}")
                 if not reply:
-                    log("[skip] 空回复，不发送")
+                    log(
+                        "[skip] 空回复，不发送："
+                        + (get_agent().last_skip_reason or "未知原因")
+                    )
                 elif args.live:
                     send_reply(hwnd, reply)
                     log("[sent] 已发送")
@@ -381,7 +384,10 @@ def main() -> int:
                     continue
                 log(f"[reply] {reply!r}")
                 if not reply:
-                    log("[skip] 空回复，不发送")
+                    log(
+                        "[skip] 空回复，不发送："
+                        + (get_agent().last_skip_reason or "未知原因")
+                    )
                 elif args.live:
                     try:
                         send_reply(hwnd, reply)

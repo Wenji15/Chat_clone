@@ -325,7 +325,7 @@ def main() -> int:
             reply = agent.chat_reply(history, chat=title, gap_minutes=gap_minutes)
             gap_minutes = None
             if not reply:
-                print("  [skip] 模型返回空回复")
+                print(f"  [skip] 模型返回空回复：{agent.last_skip_reason or '未知原因'}")
                 break
             ws.send_reply(hwnd, reply)
             rounds += 1

@@ -104,6 +104,7 @@ class CloneAgent:
         # web/RAG 问答是否开启 thinking（微信回复由 chat_native 单独控制）
         self.llm.think_default = bool(cfg.get("thinking_answer", False))
         self.llm.num_ctx = int(cfg.get("num_ctx", 8192))
+        self.last_skip_reason = ""
         self.kb = KnowledgeBase(root / cfg["vector_store_file"])
         self.memory = LongTermMemory(root / cfg["memory_file"])
         self.top_k = int(cfg.get("top_k", 4))
@@ -285,8 +286,10 @@ class CloneAgent:
         避免把“辞职信/工作经历”之类文档内容硬塞进日常聊天。
         chat 传入会话名时：该会话在 data/wechat 下没有历史语料，就退回基础模型。
         """
+        self.last_skip_reason = ""
         recent = [m for m in history[-40:] if isinstance(m, dict) and m.get("text")]
         if not recent:
+            self.last_skip_reason = "没有可读对话"
             return ""
         is_group = "群" in chat or chat == "🐦🐦"
         merged = _merge_history(recent, merge_them=not is_group)
@@ -392,6 +395,7 @@ class CloneAgent:
                 n and n in last_text for n in me_names
             )
             if is_group and not explicit:
+                self.last_skip_reason = "群内邀约但没点名我"
                 return ""
         if intent:
             system += (
@@ -576,4 +580,6 @@ class CloneAgent:
             q_count = last_msg.count("？") + last_msg.count("?")
             parts = parts[:2] if q_count >= 2 else parts[:1]
             reply = "".join(parts)
+        if not reply.strip():
+            self.last_skip_reason = "模型输出为空（或清洗后为空）"
         return reply
