@@ -29,6 +29,10 @@ def _clean_reply(text: str) -> str:
     text = re.sub(r"\s+", " ", text).strip()
     text = re.sub(r"@[^\s，。！？!?]+", "", text)  # 微信回复默认不带 @
     text = re.sub(r"\s{2,}", " ", text).strip()
+    text = text.strip("，,。.、；;：:！!？? ")  # 去掉开头/结尾的标点
+    text = re.sub(r"^\s*(我|对方)[：:]\s*", "", text)  # 去掉对话标签
+    if "我：" in text and "对方：" in text:
+        return ""  # 模型在续写对话记录，不是回复
     text = re.sub(r"(.{1,12}?)\1{3,}", r"\1", text)  # 连续重复片段只留一次
     text = re.sub(r"(.{2,10}?)\1+", r"\1", text)  # “我也是我也是”只留一次
     if text.count("@") > 2:  # 最多保留 2 个 @
@@ -285,6 +289,8 @@ class CloneAgent:
         max_sentences: int = 3,
         chat: str = "",
         gap_minutes: float | None = None,
+        temperature: float = 0.7,
+        extra_instruction: str = "",
     ) -> str:
         """微信替聊模式：根据最近对话生成简短、口语化的回复。
 
@@ -331,8 +337,22 @@ class CloneAgent:
             "- 对方提到地名/产品/人物/视频时，如果你有把握，接一句不超过 10 个字的"
             "梗、冷知识或类比（例如把江汉路说成“小将军路”）；没把握就别提，不要编；\n"
             "- 不要主动约时间、提议聚聚，除非对方明确邀请；\n"
-            "- 只输出要发送的回复内容本身，不要加引号。"
+            "- 只输出要发送的回复内容本身，不要加引号。\n"
+            "- 只写下一条要发的话，不要写“我：”“对方：”这类对话标签，"
+            "不要复述你之前说过的话。"
         )
+        if extra_instruction:
+            system += "\n" + extra_instruction
+        mine = [
+            str(m.get("text", "")).strip()
+            for m in recent
+            if m.get("role") == "me" and str(m.get("text", "")).strip()
+        ]
+        if mine:
+            system += (
+                "\n\n不要重复你最近说过的这些话：\n"
+                + "\n".join(f"- {t}" for t in mine[-5:])
+            )
         if style_examples:
             system += (
                 "\n\n下面是我以前说过的话，请模仿我的语气、句长和用词"
@@ -467,7 +487,7 @@ class CloneAgent:
         reply = self.llm.chat_native(
             messages,
             model=model,
-            temperature=0.7,
+            temperature=temperature,
             think=bool(self.cfg.get("thinking", False)),
         ).strip()
         degenerate = _is_degenerate(reply)
@@ -484,7 +504,9 @@ class CloneAgent:
         if model and (
             len(reply) < 2 or degenerate or any(k in reply for k in refusals)
         ):
-            fallback = self.llm.chat_native(messages, model=model, temperature=0.7)
+            fallback = self.llm.chat_native(
+                messages, model=model, temperature=temperature
+            )
             alt = fallback.strip()
             if len(alt) >= 2 and not _is_degenerate(alt):
                 reply = alt
@@ -511,14 +533,19 @@ class CloneAgent:
             for m in recent
             if m.get("role") == "me" and str(m.get("text", "")).strip()
         ]
-        if reply and any(_similar(reply, t) for t in recent_mine[-3:]):
+        if reply and any(_similar(reply, t) for t in recent_mine[-5:]):
             try:
-                alt = self.llm.chat_native(messages, model=model, temperature=0.8)
+                alt = self.llm.chat_native(
+                    messages, model=model, temperature=min(1.0, temperature + 0.2)
+                )
                 alt_text = _clean_reply(alt.strip())
                 if alt_text and not any(
-                    _similar(alt_text, t) for t in recent_mine[-3:]
+                    _similar(alt_text, t) for t in recent_mine[-5:]
                 ):
                     reply = alt_text
+                else:
+                    self.last_skip_reason = "模型在重复之前的话"
+                    return ""
             except Exception:
                 pass
 

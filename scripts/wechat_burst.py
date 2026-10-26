@@ -99,7 +99,15 @@ def main() -> int:
             if got:
                 _li, _lo, incoming, outgoing, _t = got
                 msg = (
-                    agent.chat_reply(ws.build_history(incoming, outgoing), chat=args.chat)
+                    agent.chat_reply(
+                        ws.build_history(incoming, outgoing),
+                        chat=args.chat,
+                        temperature=0.9,
+                        extra_instruction=(
+                            f"这是连续对话的第 {i} 条，"
+                            "换个角度接话或追问，不要重复之前说过的内容。"
+                        ),
+                    )
                     or ""
                 )
             if not msg:
