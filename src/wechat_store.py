@@ -54,6 +54,10 @@ def append_messages(chat: str, msgs: list[dict]) -> int:
     否则重复的“行/好/哈哈”会被误删或重复写入。
     """
     existing = load_messages(chat)
+    # 老数据没有 seq：按当前顺序补一个，保证后续同分钟消息能稳定排序
+    for i, m in enumerate(existing, 1):
+        m.setdefault("seq", i)
+    max_seq = max((int(m.get("seq") or 0) for m in existing), default=0)
     seen = {
         (str(m.get("ts") or ""), m.get("sender") or "", m.get("text") or "")
         for m in existing
@@ -68,7 +72,9 @@ def append_messages(chat: str, msgs: list[dict]) -> int:
         key = (ts, m.get("sender") or "", text)
         if key in seen:
             continue
+        max_seq += 1
         rec = {
+            "seq": max_seq,
             "ts": ts,
             "role": m.get("role"),          # me / them
             "sender": m.get("sender"),      # 具体发送人（群聊用）
@@ -80,7 +86,8 @@ def append_messages(chat: str, msgs: list[dict]) -> int:
         seen.add(key)
         added += 1
 
-    all_msgs.sort(key=lambda m: str(m.get("ts", "")))
+    # 同一分钟内按 seq 保序（分钟级时间戳无法区分先后）
+    all_msgs.sort(key=lambda m: (str(m.get("ts", "")), int(m.get("seq") or 0)))
     p = chat_dir(chat) / "messages.jsonl"
     with open(p, "w", encoding="utf-8") as f:
         for m in all_msgs:
@@ -90,7 +97,10 @@ def append_messages(chat: str, msgs: list[dict]) -> int:
 
 def export_markdown(chat: str) -> Path:
     """导出为可读 Markdown（按时间升序，新消息在下方）。"""
-    msgs = sorted(load_messages(chat), key=lambda m: str(m.get("ts", "")))
+    msgs = sorted(
+        load_messages(chat),
+        key=lambda m: (str(m.get("ts", "")), int(m.get("seq") or 0)),
+    )
     md = chat_dir(chat) / "chat.md"
     lines = [f"# {chat}", ""]
     for m in msgs:
