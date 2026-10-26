@@ -321,6 +321,9 @@ def main() -> int:
     pyautogui.click(left + int(w * 0.5), top + 12)  # 点标题栏聚焦
     time.sleep(0.5)
     pyautogui.moveTo(left + int(w * 0.5), top + int(h * 0.5))
+    # 点列表右侧空白（不点消息），把焦点交给消息列表，PageDown/滚轮才生效
+    pyautogui.click(left + w - 40, top + int(h * 0.5))
+    time.sleep(0.4)
     pyautogui.press("home")
     pyautogui.scroll(3000)  # 回顶部
     time.sleep(0.8)
