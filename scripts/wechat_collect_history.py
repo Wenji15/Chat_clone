@@ -245,7 +245,13 @@ def open_history_window(hwnd: int, engine: RapidOCR) -> bool:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--screens", type=int, default=10)
+    ap.add_argument("--screens", type=int, default=60)
+    ap.add_argument(
+        "--stall",
+        type=int,
+        default=8,
+        help="连续多少屏没有新消息才停止（懒加载需要多拖几次）",
+    )
     ap.add_argument(
         "--step",
         type=int,
@@ -355,14 +361,11 @@ def main() -> int:
         print(f"[{i}] {len(msgs)} 条（新增 {len(new)}）")
         if i > 0 and not new:
             no_new += 1
-            if no_new >= 2:
-                print("连续两屏没有新消息，停止（可能已到底部）")
+            if no_new >= args.stall:
+                print(f"连续 {args.stall} 屏没有新消息，停止（可能已到底部）")
                 break
-            print("本屏无新消息，用 PageDown 兜底")
-            pyautogui.press("pagedown")
-            time.sleep(1.0)
-            continue
-        no_new = 0
+        else:
+            no_new = 0
         # 确保窗口在前台、鼠标在消息列表上，滚轮事件才会送到列表
         try:
             user32.SetForegroundWindow(hwnd)
