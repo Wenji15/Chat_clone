@@ -27,13 +27,17 @@ from src.wechat_store import (  # noqa: E402
 CHUNK = 40
 
 
-def collect_by_person() -> dict[str, list[dict]]:
+def collect_by_person(
+    chats: set[str] | None = None, context: int = 2
+) -> dict[str, list[dict]]:
     names, alias = _load_names()
     out: dict[str, list[dict]] = {n: [] for n in names}
     for d in sorted(STORE.iterdir()):
         if not d.is_dir():
             continue
         chat = d.name
+        if chats and chat not in chats:
+            continue
         msgs = load_messages(chat)
         for i, m in enumerate(msgs):
             if m.get("role") != "them":
@@ -41,7 +45,7 @@ def collect_by_person() -> dict[str, list[dict]]:
             name = clean_sender(m.get("sender"))
             if not name:
                 continue
-            win = msgs[max(0, i - 2) : i + 3]
+            win = msgs[max(0, i - context) : i + context + 1]
             lines = []
             for x in win:
                 who = (
@@ -72,7 +76,8 @@ def summarize_chunk(client: OllamaClient, name: str, rows: list[dict]) -> str:
         "4. 区分“对群友的态度”和“对我的态度”。\n"
         "请提炼：\n"
         "- 关系/身份\n- 性格\n- 说话风格（句长、口头禅、梗）\n"
-        "- 常聊话题\n- 对群友的态度\n- 对我的态度（仅直接互动）\n"
+        "- 常聊话题\n- 对群友的态度\n- 关系网（和群内其他人的关系）\n"
+        "- 对我的态度（仅直接互动）\n"
         "- 近期状态\n- 有代表性的原话 1-3 条\n"
         "不确定的写“不确定”，不要编造。用简洁中文条目。\n\n"
         + body
@@ -88,6 +93,7 @@ def finalize(client: OllamaClient, name: str, notes: str, total: int, span: str)
         "保留有依据的内容，去掉重复；不确定的标注“不确定”。"
         "不要推断恋爱/暧昧/性别；没有直接互动证据时，“对我的态度”写“不确定”。"
         "结构：关系、性格、说话风格、常聊话题、对群友的态度、"
+        "关系网（和群内其他人的关系）、"
         "对我的态度（仅直接互动）、近期状态、口头禅/梗、原话依据。\n\n"
         f"消息数：{total}，时间范围：{span}\n\n{notes}"
     )
@@ -102,6 +108,12 @@ def main() -> int:
     ap.add_argument("--person", default="")
     ap.add_argument("--min-messages", type=int, default=30)
     ap.add_argument("--max-messages", type=int, default=200)
+    ap.add_argument("--context", type=int, default=2, help="前后各带几条消息")
+    ap.add_argument(
+        "--chats",
+        default="",
+        help="只分析这些会话，逗号分隔；为空=全部",
+    )
     args = ap.parse_args()
 
     cfg = load_config()
@@ -110,7 +122,8 @@ def main() -> int:
         chat_model=cfg["ollama"]["chat_model"],
         embed_model=cfg["ollama"]["embed_model"],
     )
-    by_person = collect_by_person()
+    chats = {c.strip() for c in args.chats.split(",") if c.strip()} or None
+    by_person = collect_by_person(chats=chats, context=args.context)
     targets = [args.person] if args.person else sorted(by_person)
 
     outdir = ROOT / "data" / "people"
@@ -131,6 +144,8 @@ def main() -> int:
             print(f"[{name}] {i + len(part)}/{len(rows)}")
         md = finalize(client, name, "\n\n".join(notes), len(rows), span)
         path = outdir / f"{safe_name(name)}.md"
+        if path.exists():
+            path.replace(path.with_suffix(".md.bak"))
         path.write_text(md, encoding="utf-8")
         print(f"[ok] {name} -> {path.name}")
     return 0
