@@ -116,6 +116,27 @@ def clean_sender(name: str) -> str:
     return ""
 
 
+def is_me_name(name: str) -> bool:
+    """判断某个名字/别名是否是我本人（wechat_rules.my_names 的归一形式）。"""
+    global _ME_CACHE
+    if _ME_CACHE is None:
+        try:
+            rules = json.loads(
+                (ROOT / "wechat_rules.json").read_text(encoding="utf-8")
+            )
+            _ME_CACHE = {
+                clean_sender(n)
+                for n in (rules.get("my_names") or [])
+                if clean_sender(n)
+            }
+        except Exception:
+            _ME_CACHE = set()
+    return clean_sender(name) in _ME_CACHE
+
+
+_ME_CACHE: set[str] | None = None
+
+
 def chat_dir(chat: str) -> Path:
     d = STORE / safe_name(chat)
     d.mkdir(parents=True, exist_ok=True)

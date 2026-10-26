@@ -20,6 +20,7 @@ from src.wechat_store import (  # noqa: E402
     STORE,
     _load_names,
     clean_sender,
+    is_me_name,
     load_messages,
     safe_name,
 )
@@ -43,14 +44,14 @@ def collect_by_person(
             if m.get("role") != "them":
                 continue
             name = clean_sender(m.get("sender"))
-            if not name:
+            if not name or is_me_name(m.get("sender")):
                 continue
             win = msgs[max(0, i - context) : i + context + 1]
             lines = []
             for x in win:
                 who = (
                     "我"
-                    if x.get("role") == "me"
+                    if x.get("role") == "me" or is_me_name(x.get("sender"))
                     else (clean_sender(x.get("sender")) or "成员")
                 )
                 lines.append(f"{who}：{x.get('text', '')}")

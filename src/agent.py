@@ -19,7 +19,7 @@ from .memory import KnowledgeBase, LongTermMemory
 from .ollama_client import OllamaClient
 from .tools import TOOLS_SCHEMA, execute
 from .wechat_profile import load_person, load_profile
-from .wechat_store import is_group_name
+from .wechat_store import is_group_name, is_me_name
 
 
 def _clean_reply(text: str) -> str:
@@ -54,7 +54,7 @@ def _merge_history(history: list[dict], merge_them: bool = True) -> list[dict]:
         text = str(m.get("text", "")).strip()
         if not text:
             continue
-        role = "me" if m.get("role") == "me" else "them"
+        role = "me" if m.get("role") == "me" or is_me_name(m.get("sender")) else "them"
         if out and out[-1]["role"] == role and (role == "me" or merge_them):
             out[-1]["text"] += "\n" + text
         else:
@@ -307,7 +307,11 @@ class CloneAgent:
         merged = _merge_history(recent, merge_them=not is_group)
         lines = []
         for m in merged:
-            who = "我" if m.get("role") == "me" else (m.get("sender") or "对方")
+            who = (
+                "我"
+                if m.get("role") == "me" or is_me_name(m.get("sender"))
+                else (m.get("sender") or "对方")
+            )
             lines.append(f"{who}：{str(m.get('text', '')).strip()}")
         convo = "\n".join(lines)
         style_examples = (
