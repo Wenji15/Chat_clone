@@ -335,10 +335,11 @@ def main() -> int:
         print("没有采集到任何消息")
         return 1
 
-    # 采集从顶部（旧）向下（新）逐屏进行，screens 已是时间正序，不能再反转
+    # 聊天记录窗口是“最新在上、最旧在下”，从上往下滚是越来越旧：
+    # 屏幕顺序要反，每屏内部也要反，才是时间正序
     all_msgs: list[dict] = []
-    for msgs in screens:
-        for m in msgs:
+    for msgs in reversed(screens):
+        for m in reversed(msgs):
             if all_msgs and all_msgs[-1]["role"] == m["role"] and all_msgs[-1]["text"] == m["text"]:
                 continue
             all_msgs.append(m)
