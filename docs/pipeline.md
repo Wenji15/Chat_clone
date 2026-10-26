@@ -54,7 +54,7 @@
 | 路径 | 作用 |
 |------|------|
 | `data/wechat/<会话>/messages.jsonl` | 每行一条消息（ts/role/sender/text） |
-| `data/wechat/<会话>/chat.md` | 按时间排序的可读记录 |
+| `data/wechat/<会话>/chat.txt` | 按时间排序的可读记录（纯文本） |
 | `data/raw/wechat/<会话>.md` | 给 `ingest.py` 用的原料 |
 | `data/knowledge_store.json` | RAG 向量库 |
 | `data/wechat/<会话>/vectors.json` | 该会话历史检索的向量索引（增量更新） |
@@ -83,7 +83,7 @@
   → 分段 OCR（每段 700px）
   → 解析：发送者 / 时间 / 内容
   → 每屏向下滚 N 次（默认 18 次小滚轮）
-  → 合并去重 → 写入 messages.jsonl / chat.md / raw md
+  → 合并去重 → 写入 messages.jsonl / chat.txt / raw md
   → 还原窗口大小
 ```
 
@@ -461,12 +461,12 @@ schtasks /Create /SC WEEKLY /D SUN /TN "AI_Clone_Retrain" ^
 机器人每次 OCR 到消息后，**先写入语料库再决定是否回复**：
 
 ```
-OCR → build_history → append_messages（去重）→ export_markdown → 分类/回复
+OCR → build_history → append_messages（去重）→ export_text → 分类/回复
 ```
 
 - 去重键：`(ts, sender, text)`，没有时间戳时退化为 `(sender, text)`
 - 新消息带 `source: "live"`，与历史采集的 `collect` 区分
-- 只在新增加时导出 `chat.md`，不重复写盘
+- 只在新增加时导出 `chat.txt`，不重复写盘
 
 ### 13.2 跟聊循环
 

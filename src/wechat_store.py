@@ -4,7 +4,7 @@
 目录结构：
     data/wechat/<会话名>/
         messages.jsonl   # 结构化记录，一行一条
-        chat.md          # 可读导出（也可直接喂给 ingest.py）
+        chat.txt          # 可读导出（纯文本）
 """
 from __future__ import annotations
 
@@ -95,16 +95,20 @@ def append_messages(chat: str, msgs: list[dict]) -> int:
     return added
 
 
-def export_markdown(chat: str) -> Path:
-    """导出为可读 Markdown（按时间升序，新消息在下方）。"""
+def export_text(chat: str) -> Path:
+    """导出为纯文本 chat.txt（按时间升序，新消息在下方）。"""
     msgs = sorted(
         load_messages(chat),
         key=lambda m: (str(m.get("ts", "")), int(m.get("seq") or 0)),
     )
-    md = chat_dir(chat) / "chat.md"
-    lines = [f"# {chat}", ""]
+    out = chat_dir(chat) / "chat.txt"
+    lines = []
     for m in msgs:
         who = m.get("sender") or ("我" if m.get("role") == "me" else "对方")
-        lines.append(f"- [{m.get('ts', '')}] {who}：{m.get('text', '')}")
-    md.write_text("\n".join(lines), encoding="utf-8")
-    return md
+        lines.append(f"[{m.get('ts', '')}] {who}：{m.get('text', '')}")
+    out.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+    return out
+
+
+# 兼容旧调用名
+export_markdown = export_text

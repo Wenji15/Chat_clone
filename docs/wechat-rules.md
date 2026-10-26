@@ -3,7 +3,7 @@
 | # | 规则 | 状态 | 对应实现 |
 |---|------|------|---------|
 | 1 | 目标人物索引 / 针对性语气 | 🚧 基础已建 | [contacts.json](../contacts.json) + 会话标题识别 |
-| 2 | 每个会话一个文件，存发送人/内容/时间 | ✅ 已完成 | [src/wechat_store.py](../src/wechat_store.py) → `data/wechat/<会话>/messages.jsonl` + `chat.md` |
+| 2 | 每个会话一个文件，存发送人/内容/时间 | ✅ 已完成 | [src/wechat_store.py](../src/wechat_store.py) → `data/wechat/<会话>/messages.jsonl` + `chat.txt` |
 | 3 | 自动滚动采集历史对话 | ✅ 已完成 | [scripts/wechat_collect.py](../scripts/wechat_collect.py)（带发送者/时间） |
 | 4 | 回复欲望 A/B/C/D | ✅ 已实现并测试 | [src/reply_desire.py](../src/reply_desire.py) + [wechat_rules.json](../wechat_rules.json) |
 | 5 | 自动识别未读红点 | ✅ 已实现 | [src/wechat_unread.py](../src/wechat_unread.py)（大徽标 + 小红点） |
@@ -17,7 +17,7 @@
 data/wechat/
   <会话名>/
     messages.jsonl   # {"ts","role":"me|them","sender","text"}
-    chat.md          # 可读导出（可直接喂给 ingest.py）
+    chat.txt         # 可读导出（纯文本）
 ```
 
 ## 使用
