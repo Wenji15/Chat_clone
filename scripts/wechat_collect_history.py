@@ -245,18 +245,18 @@ def open_history_window(hwnd: int, engine: RapidOCR) -> bool:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--screens", type=int, default=10)
+    ap.add_argument("--screens", type=int, default=60)
     ap.add_argument(
         "--step",
         type=int,
-        default=12,
-        help="wheel 模式下每屏滚轮格数；page 模式忽略",
+        default=6,
+        help="每屏滚动量：keys=行数，wheel=滚轮格数（默认 6，小步慢滚）",
     )
     ap.add_argument(
         "--mode",
         choices=["page", "wheel", "keys"],
-        default="page",
-        help="翻页方式：page=PageDown，wheel=滚轮，keys=方向键逐行",
+        default="keys",
+        help="翻页方式：keys=方向键逐行(默认)，page=PageDown，wheel=滚轮",
     )
     ap.add_argument("--name", type=str, default="")
     ap.add_argument("--chat", type=str, default="", help="先搜索并打开这个会话")
