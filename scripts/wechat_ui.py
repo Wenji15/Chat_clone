@@ -31,6 +31,8 @@ PAUSE_COLLECT = ROOT / "PAUSE_COLLECT"
 STOP_COLLECT = ROOT / "STOP_COLLECT"
 COLLECT = ROOT / "scripts" / "wechat_collect.py"
 COLLECT_HISTORY = ROOT / "scripts" / "wechat_collect_history.py"
+BURST = ROOT / "scripts" / "wechat_burst.py"
+STOP_BURST = ROOT / "STOP_BURST"
 INGEST = ROOT / "scripts" / "ingest.py"
 
 
@@ -51,6 +53,7 @@ class App:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.proc: subprocess.Popen | None = None
+        self.burst_proc: subprocess.Popen | None = None
         self.log_pos = LOG.stat().st_size if LOG.exists() else 0
         self.q: queue.Queue = queue.Queue()
         self.cq: queue.Queue = queue.Queue()
@@ -87,6 +90,27 @@ class App:
         ttk.Button(left, text="保存设置", command=self._save).grid(
             row=3, column=0, sticky="ew", pady=10
         )
+
+        burst = ttk.LabelFrame(left, text="连续发送（测试，最多 20 条）")
+        burst.grid(row=4, column=0, sticky="ew", pady=4)
+        self.var_burst_chat = tk.StringVar()
+        self.cmb_burst = ttk.Combobox(burst, textvariable=self.var_burst_chat)
+        self.cmb_burst.pack(fill="x", padx=4, pady=2)
+        rowf = ttk.Frame(burst)
+        rowf.pack(fill="x", padx=4)
+        ttk.Label(rowf, text="条数").pack(side="left")
+        self.var_burst_count = tk.StringVar(value="5")
+        ttk.Spinbox(
+            rowf, from_=1, to=20, textvariable=self.var_burst_count, width=4
+        ).pack(side="left", padx=2)
+        self.var_burst_text = tk.StringVar(value="测试 {i}")
+        ttk.Entry(burst, textvariable=self.var_burst_text).pack(
+            fill="x", padx=4, pady=2
+        )
+        bf2 = ttk.Frame(burst)
+        bf2.pack(fill="x", padx=4, pady=2)
+        ttk.Button(bf2, text="开始", command=self._burst_start).pack(side="left")
+        ttk.Button(bf2, text="停止", command=self._burst_stop).pack(side="left")
 
         # 右：状态与控制
         top = ttk.Frame(right)
@@ -175,6 +199,7 @@ class App:
             for v in src.get(key, []) or []:
                 lb.insert("end", v)
         self.cmb_chat["values"] = list(self.lb_multi.get(0, "end"))
+        self.cmb_burst["values"] = list(self.lb_multi.get(0, "end"))
         self.var_review.set(bool(bc.get("review_mode", False)))
 
     def _save(self) -> None:
@@ -183,6 +208,7 @@ class App:
         bc["review_mode"] = bool(self.var_review.get())
         save_json(BOT_CONFIG, bc)
         self.cmb_chat["values"] = list(self.lb_multi.get(0, "end"))
+        self.cmb_burst["values"] = list(self.lb_multi.get(0, "end"))
 
         rules = load_json(RULES_CONFIG, {})
         rules["my_names"] = list(self.lb_names.get(0, "end"))
@@ -344,7 +370,61 @@ class App:
         self.status_var.set("已暂停")
         self._log("=== 已暂停 ===\n")
 
+    def _burst_start(self) -> None:
+        if self.proc and self.proc.poll() is None:
+            messagebox.showwarning("提示", "机器人正在运行，请先停止再连续发送")
+            return
+        if self.burst_proc and self.burst_proc.poll() is None:
+            messagebox.showinfo("提示", "连续发送正在进行")
+            return
+        chat = self.var_burst_chat.get().strip()
+        if not chat:
+            messagebox.showerror("错误", "先选择或输入会话")
+            return
+        try:
+            count = int(self.var_burst_count.get())
+        except ValueError:
+            count = 5
+        count = max(1, min(20, count))
+        text = self.var_burst_text.get().strip() or "测试 {i}"
+        STOP_BURST.unlink(missing_ok=True)
+        self._log(f"=== 连续发送 {count} 条 -> {chat} ===\n")
+        self.burst_proc = subprocess.Popen(
+            [
+                sys.executable,
+                str(BURST),
+                "--chat",
+                chat,
+                "--count",
+                str(count),
+                "--text",
+                text,
+            ],
+            cwd=str(ROOT),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+        )
+        threading.Thread(
+            target=self._read_stdout, args=(self.burst_proc,), daemon=True
+        ).start()
+        self.root.after(150, self._poll_queue)
+
+    def _burst_stop(self) -> None:
+        STOP_BURST.write_text("stop", encoding="utf-8")
+        if self.burst_proc and self.burst_proc.poll() is None:
+            try:
+                self.burst_proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                self.burst_proc.terminate()
+        self._log("=== 已停止连续发送 ===\n")
+
     def _on_close(self) -> None:
+        if self.burst_proc and self.burst_proc.poll() is None:
+            self._burst_stop()
         # 关闭控制台时保持暂停，避免机器人在无人观察时乱点
         try:
             PAUSE.write_text("pause", encoding="utf-8")
