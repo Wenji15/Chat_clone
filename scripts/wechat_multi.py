@@ -350,7 +350,7 @@ def main() -> int:
                 pass
             print(f"  [follow] 新消息：{n_last_in[1]!r}")
 
-        return "replied"
+        return "replied" if rounds else "no_reply"
 
     paused_logged = False
     last_dot = {"x": -1, "y": -1, "ts": 0.0}
