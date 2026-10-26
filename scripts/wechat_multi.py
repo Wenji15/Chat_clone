@@ -436,8 +436,15 @@ def main() -> int:
             ):
                 print("[skip] 同一红点刚点过，避免反复点进")
                 continue
-            print(f"[click] {target!r} @({d['x']},{d['y']})")
-            pyautogui.click(left + d["x"], top + d["y"])
+            try:
+                current = ws.read_title(engine, img)
+            except Exception:
+                current = ""
+            if current and target in current:
+                print(f"[keep] 当前已是 {target!r}，不重复点击")
+            else:
+                print(f"[click] {target!r} @({d['x']},{d['y']})")
+                pyautogui.click(left + d["x"], top + d["y"])
             last_dot = {"x": d["x"], "y": d["y"], "ts": time.time()}
             time.sleep(1.8)
             status = process(target)

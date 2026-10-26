@@ -48,6 +48,29 @@ def _merge_history(history: list[dict]) -> list[dict]:
     return out
 
 
+_NAME_CALL_RE = re.compile(
+    r"(?:叫上|叫|找|喊|约|带|跟|和|问)([\u4e00-\u9fa5]{2,3})"
+    r"(?=他们|他|她|一起|说|讲|聊|去|来|玩|吃|喝)"
+)
+_NAME_STOP = {
+    "他们", "我们", "你们", "大家", "朋友", "兄弟", "老板", "师傅", "同事",
+    "同学", "哥们", "姐妹", "老婆", "老公", "孩子", "家里", "别人", "自己",
+    "对方", "群里", "一下", "一声", "一句", "时间", "地方", "东西",
+}
+
+
+def _unknown_names(text: str, known: set[str]) -> list[str]:
+    """找出“叫上/找/问 + 人名”里不在已知名单中的人名。"""
+    out: list[str] = []
+    for m in _NAME_CALL_RE.finditer(text or ""):
+        name = m.group(1)
+        if name in _NAME_STOP or name in known:
+            continue
+        if name not in out:
+            out.append(name)
+    return out
+
+
 def _is_degenerate(text: str) -> bool:
     """判断是否是复读/刷屏式输出。"""
     if len(text) > 120 or text.count("@") > 4:
@@ -206,6 +229,9 @@ class CloneAgent:
             '"addressed_to_me":true或false（是否针对我，包括提到我、@我、说“这个AI/学长”），'
             '"expectation":"对方期待什么回应，一句话",'
             '"topic":"这一句在聊什么，尽量具体，比如“线上麻将局”",'
+            '"emotion":"开心/调侃/抱怨/试探/炫耀/认真/敷衍之一",'
+            '"subtext":"是否有潜台词，一句话；没有就空",'
+            '"meme":"是否在玩梗/引用，一句话；没有就空",'
             '"entities":["对方提到的地名/产品/人物/视频，最多2个"]}\n\n'
             f"聊天记录：\n{convo}"
         )
@@ -218,6 +244,28 @@ class CloneAgent:
             return json.loads(m.group(0)) if m else {}
         except Exception:
             return {}
+
+    def _known_names(self, chat: str) -> set[str]:
+        """已知人名：我的昵称 + 该会话历史里出现过的发送者。"""
+        names: set[str] = set()
+        try:
+            rules = json.loads(
+                (self.root / "wechat_rules.json").read_text(encoding="utf-8")
+            )
+            names.update(str(n) for n in (rules.get("my_names") or []) if n)
+        except Exception:
+            pass
+        if chat:
+            try:
+                from .wechat_store import load_messages
+
+                for m in load_messages(chat)[-500:]:
+                    s = str(m.get("sender") or "").strip()
+                    if s and s != "未知":
+                        names.add(s)
+            except Exception:
+                pass
+        return names
 
     # ------------------------------------------------------------------ #
     def chat_reply(
@@ -347,6 +395,9 @@ class CloneAgent:
                 f"- 是否在对我说：{intent.get('addressed_to_me', '')}\n"
                 f"- 期待：{intent.get('expectation', '')}\n"
                 f"- 话题：{intent.get('topic', '')}\n"
+                f"- 情绪：{intent.get('emotion', '')}\n"
+                f"- 潜台词：{intent.get('subtext', '') or '无'}\n"
+                f"- 玩梗：{intent.get('meme', '') or '无'}\n"
                 "请据此自然回应：分享/感慨就认同或补充（如“确实不错”“下次去看看”），"
                 "不要追问时间/安排；提问就回答；邀请才确认时间；倾诉就安慰；"
                 "如果对方在邀约、而画像里说我对这事不感兴趣，就委婉拒绝"
@@ -483,6 +534,34 @@ class CloneAgent:
                         reply = alt_text
                 except Exception:
                     pass
+
+        # 防止编造历史/画像里没出现的人名
+        bad_names = _unknown_names(reply, self._known_names(chat))
+        if bad_names:
+            try:
+                retry = [
+                    messages[0],
+                    {
+                        "role": "user",
+                        "content": messages[1]["content"]
+                        + f"\n\n要求：不要提任何历史/画像里没出现的人名"
+                        f"（特别是 {'、'.join(bad_names)}）。",
+                    },
+                ]
+                alt = self.llm.chat_native(retry, model=model, temperature=0.6)
+                alt_text = _clean_reply(alt.strip())
+                if alt_text and not _unknown_names(alt_text, self._known_names(chat)):
+                    reply = alt_text
+                else:
+                    for name in bad_names:
+                        reply = re.sub(
+                            r"[^。！？!?]*" + re.escape(name) + r"[^。！？!?]*[。！？!?]?",
+                            "",
+                            reply,
+                        )
+                    reply = reply.strip("，,。 ")
+            except Exception:
+                pass
 
         # 兜底：若模型还是写长了，按句号/问号切成最多 2 句
         parts = re.split(r"(?<=[。！？!?])", reply)
