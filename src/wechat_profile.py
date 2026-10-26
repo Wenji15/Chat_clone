@@ -14,3 +14,14 @@ def load_profile(root: Path, chat: str) -> str:
         return p.read_text(encoding="utf-8").strip()
     except OSError:
         return ""
+
+
+def load_person(root: Path, name: str) -> str:
+    """读取个人档案 data/people/<名>.md。"""
+    if not name:
+        return ""
+    p = root / "data" / "people" / f"{safe_name(name)}.md"
+    try:
+        return p.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""

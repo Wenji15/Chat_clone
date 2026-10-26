@@ -151,6 +151,13 @@ def _data_heavy(text: str) -> bool:
     return False
 
 
+def _parse_ts(s) -> float:
+    try:
+        return time.mktime(time.strptime(str(s)[:16], "%Y-%m-%d %H:%M"))
+    except Exception:
+        return 0.0
+
+
 def append_messages(chat: str, msgs: list[dict]) -> int:
     """追加消息，按 (ts, sender, text) 去重（无 ts 时退化为 (sender, text)）。
 
@@ -167,6 +174,16 @@ def append_messages(chat: str, msgs: list[dict]) -> int:
         for m in existing
     }
     all_msgs = list(existing)
+    # 实时消息：内容+发送人相同且 10 分钟内，视为同一屏重复识别
+    live_recent = [
+        (
+            clean_sender(m.get("sender")) or "",
+            m.get("text") or "",
+            _parse_ts(m.get("ts")),
+        )
+        for m in existing[-300:]
+        if m.get("source") == "live"
+    ]
     added = 0
     for m in msgs:
         text = (m.get("text") or "").strip()
@@ -175,21 +192,35 @@ def append_messages(chat: str, msgs: list[dict]) -> int:
         if _data_heavy(text):
             text = "报名"
         ts = str(m.get("ts") or time.strftime("%Y-%m-%d %H:%M"))
-        key = (ts, m.get("sender") or "", text)
+        sender_clean = clean_sender(m.get("sender")) or ""
+        key = (ts, sender_clean, text)
         if key in seen:
             continue
+        if m.get("source") == "live":
+            cur = _parse_ts(ts)
+            dup = any(
+                s == sender_clean
+                and t == text
+                and ts0
+                and abs(cur - ts0) <= 600
+                for s, t, ts0 in live_recent
+            )
+            if dup:
+                continue
         max_seq += 1
         rec = {
             "seq": max_seq,
             "ts": ts,
             "role": m.get("role"),          # me / them
-            "sender": clean_sender(m.get("sender")) or None,
+            "sender": sender_clean or None,
             "text": text,
         }
         if m.get("source"):
             rec["source"] = m["source"]
         all_msgs.append(rec)
         seen.add(key)
+        if m.get("source") == "live" and sender_clean:
+            live_recent.append((sender_clean, text, _parse_ts(ts)))
         added += 1
 
     # 同一分钟内按 seq 保序（分钟级时间戳无法区分先后）

@@ -30,7 +30,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from src.agent import CloneAgent  # noqa: E402
 from src.config_loader import load_config  # noqa: E402
-from src.wechat_store import load_messages  # noqa: E402
+from src.wechat_store import append_messages, load_messages  # noqa: E402
 from src.wechat_unread import detect_unread  # noqa: E402
 from src.wechat_win import capture, find_wechat_hwnd, set_dpi_aware, window_rect  # noqa: E402
 from src.wechat_layout import detect_chat_x0, detect_chat_x0_ex  # noqa: E402
@@ -282,6 +282,27 @@ def main() -> int:
                 gap_minutes = (time.time() - last_ts) / 60
         except Exception:
             gap_minutes = None
+
+        # 实时入库：时间用当前时间（截图里没有稳定时间），格式与批量采集一致
+        try:
+            now_ts = time.strftime("%Y-%m-%d %H:%M")
+            live_msgs = [
+                {
+                    "ts": now_ts,
+                    "role": m.get("role"),
+                    "sender": m.get("sender"),
+                    "text": m.get("text"),
+                    "source": "live",
+                }
+                for m in history
+                if str(m.get("text") or "").strip()
+            ]
+            if live_msgs:
+                added = append_messages(title, live_msgs)
+                if added:
+                    print(f"  [store] +{added} 条")
+        except Exception as e:
+            print(f"  [warn] 实时入库失败：{e}")
 
         if not args.live:
             print(f"  [dry] 会回复 {title!r}：{collected!r}")

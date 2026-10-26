@@ -18,7 +18,7 @@ from typing import Any
 from .memory import KnowledgeBase, LongTermMemory
 from .ollama_client import OllamaClient
 from .tools import TOOLS_SCHEMA, execute
-from .wechat_profile import load_profile
+from .wechat_profile import load_person, load_profile
 from .wechat_store import is_group_name
 
 
@@ -361,6 +361,15 @@ class CloneAgent:
             )
         if profile:
             system += f"\n\n【对话对象/群的画像】\n{profile}"
+        person = ""
+        for m in reversed(merged):
+            if m.get("role") != "me" and m.get("sender"):
+                person = str(m["sender"])
+                break
+        if person and bool(self.cfg.get("person_profile_enabled", True)):
+            person_profile = load_person(self.root, person)
+            if person_profile:
+                system += f"\n\n【当前说话人：{person}】\n{person_profile}"
         gap_thr = float(self.cfg.get("gap_threshold_minutes", 30))
         if gap_minutes and gap_minutes > gap_thr:
             system += (
