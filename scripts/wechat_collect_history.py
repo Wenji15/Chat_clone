@@ -250,7 +250,13 @@ def main() -> int:
         "--step",
         type=int,
         default=12,
-        help="每屏滚动格数（默认 12；滚太少可调 20-30，跳太多调到 6）",
+        help="wheel 模式下每屏滚轮格数；page 模式忽略",
+    )
+    ap.add_argument(
+        "--mode",
+        choices=["page", "wheel"],
+        default="page",
+        help="翻页方式：page=PageDown 一页，wheel=滚轮",
     )
     ap.add_argument("--name", type=str, default="")
     ap.add_argument("--chat", type=str, default="", help="先搜索并打开这个会话")
@@ -361,8 +367,10 @@ def main() -> int:
             pass
         time.sleep(0.1)
         pyautogui.moveTo(left + int(w * 0.5), top + int(h * 0.6))
-        # 单次中档滚动：-1 太小窗口不响应，-120 一次跳太远
-        pyautogui.scroll(-args.step)
+        if args.mode == "page":
+            pyautogui.press("pagedown")
+        else:
+            pyautogui.scroll(-args.step)
         time.sleep(0.8)
 
     if not any(screens):
