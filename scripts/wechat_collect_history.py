@@ -335,9 +335,9 @@ def main() -> int:
         print("没有采集到任何消息")
         return 1
 
-    # 历史窗口自底向上采集，反转后为时间正序
+    # 采集从顶部（旧）向下（新）逐屏进行，screens 已是时间正序，不能再反转
     all_msgs: list[dict] = []
-    for msgs in reversed(screens):
+    for msgs in screens:
         for m in msgs:
             if all_msgs and all_msgs[-1]["role"] == m["role"] and all_msgs[-1]["text"] == m["text"]:
                 continue
