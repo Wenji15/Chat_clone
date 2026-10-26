@@ -1,7 +1,7 @@
 """微信助手可视化控制台（规则 8）。
 
 功能：
-- 编辑并保存 A 类设置：白名单会话、参与群聊、我的群昵称、在意的话题、B/C 阈值；
+- 编辑并保存：白名单（单聊/群聊统一管理）、我的群昵称；
 - 启动 / 停止多会话自动回复；
 - 干跑一次（只扫描不回复）；
 - 实时日志。
@@ -74,23 +74,12 @@ class App:
         right = ttk.Frame(self.root, padding=10)
         right.pack(side="right", fill="both", expand=True)
 
-        # 左：设置
-        self.lb_multi = self._list_editor(left, "白名单会话（自动回复）", 0)
-        self.lb_groups = self._list_editor(left, "参与群聊（按 A/B/C/D 判断）", 1)
-        self.lb_names = self._list_editor(left, "我的群昵称（识别 @我）", 2)
-        self.lb_interests = self._list_editor(left, "我在意的话题", 3)
-
-        thr = ttk.LabelFrame(left, text="回复阈值（分数越高越严格）")
-        thr.grid(row=4, column=0, sticky="ew", pady=6)
-        ttk.Label(thr, text="B 与我相关 ≥").grid(row=0, column=0, padx=4, pady=2)
-        self.var_b = tk.StringVar(value="0.6")
-        ttk.Entry(thr, textvariable=self.var_b, width=6).grid(row=0, column=1)
-        ttk.Label(thr, text="C 可参与 ≥").grid(row=1, column=0, padx=4, pady=2)
-        self.var_c = tk.StringVar(value="0.75")
-        ttk.Entry(thr, textvariable=self.var_c, width=6).grid(row=1, column=1)
+        # 左：设置（单聊/群聊统一白名单）
+        self.lb_multi = self._list_editor(left, "白名单（单聊/群聊统一管理）", 0)
+        self.lb_names = self._list_editor(left, "我的群昵称（识别 @我）", 1)
 
         ttk.Button(left, text="保存设置", command=self._save).grid(
-            row=5, column=0, sticky="ew", pady=10
+            row=2, column=0, sticky="ew", pady=10
         )
 
         # 右：状态与控制
@@ -174,17 +163,12 @@ class App:
         rules = load_json(RULES_CONFIG, {})
         for lb, key, src in [
             (self.lb_multi, "multi_chats", bc),
-            (self.lb_groups, "groups", rules),
             (self.lb_names, "my_names", rules),
-            (self.lb_interests, "interests", rules),
         ]:
             lb.delete(0, "end")
             for v in src.get(key, []) or []:
                 lb.insert("end", v)
-        thr = rules.get("thresholds", {})
         self.cmb_chat["values"] = list(self.lb_multi.get(0, "end"))
-        self.var_b.set(str(thr.get("B", 0.6)))
-        self.var_c.set(str(thr.get("C", 0.75)))
 
     def _save(self) -> None:
         bc = load_json(BOT_CONFIG, {})
@@ -193,14 +177,10 @@ class App:
         self.cmb_chat["values"] = list(self.lb_multi.get(0, "end"))
 
         rules = load_json(RULES_CONFIG, {})
-        rules["groups"] = list(self.lb_groups.get(0, "end"))
         rules["my_names"] = list(self.lb_names.get(0, "end"))
-        rules["interests"] = list(self.lb_interests.get(0, "end"))
-        try:
-            rules["thresholds"] = {"B": float(self.var_b.get()), "C": float(self.var_c.get())}
-        except ValueError:
-            messagebox.showerror("错误", "阈值必须是数字")
-            return
+        rules.pop("groups", None)
+        rules.pop("thresholds", None)
+        rules.pop("interests", None)
         save_json(RULES_CONFIG, rules)
         messagebox.showinfo("已保存", "设置已写入 bot_config.json / wechat_rules.json")
 

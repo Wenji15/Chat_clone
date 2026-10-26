@@ -3,7 +3,7 @@
 安全设计：
 - 只有 bot_config.json 里 multi_chats 列出的会话才自动回复；
 - 其他会话只“点开已读”，不回复；
-- 群聊先过 reply_desire 分类（A/B/C/D），单聊直接回；
+- 白名单内的单聊/群聊统一处理，不再做 A/B/C/D 分类；
 - 每个会话记录“上次回过的消息”，避免重复。
 
 用法：
@@ -30,7 +30,6 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from src.agent import CloneAgent  # noqa: E402
 from src.config_loader import load_config  # noqa: E402
-from src.reply_desire import classify, should_reply  # noqa: E402
 from src.wechat_store import append_messages, export_markdown, load_messages  # noqa: E402
 from src.wechat_unread import detect_unread  # noqa: E402
 from src.wechat_win import capture, find_wechat_hwnd, set_dpi_aware, window_rect  # noqa: E402
@@ -198,10 +197,7 @@ def main() -> int:
     chats = state.setdefault("chats", {})
 
     whitelist = set(bot_cfg.get("multi_chats", []) or [])
-    groups = set(rules.get("groups", []) or [])
-    thresholds = rules.get("thresholds", {})
     my_names = rules.get("my_names", [])
-    interests = rules.get("interests", [])
 
     agent = CloneAgent(load_config(), ROOT)
     try:
@@ -291,34 +287,6 @@ def main() -> int:
                 print(f"  [store] +{added} 条")
         except Exception as e:
             print(f"  [warn] 实时入库失败：{e}")
-
-        is_group = title in groups or contacts.get(title, {}).get("type") == "group"
-        if is_group:
-            res = classify(agent, collected[-1], history_text(history), my_names, interests)
-            cls = str(res.get("class", "D"))
-            score = float(res.get("score", 0) or 0)
-            inv = bool(res.get("invitation"))
-            to_me = bool(res.get("addressed_to_me"))
-            need = should_reply(res, thresholds)
-            thr = thresholds.get(cls)
-            thr_txt = f" 阈值={thr}" if thr is not None else ""
-            print(
-                f"  [desire] 类别={cls} 分数={score:.2f}{thr_txt}"
-                f" 邀约={inv} 点名我={to_me}"
-                f" → {'回复' if need else '不回复'}（{res.get('reason', '')}）"
-            )
-            # D 只在明显噪声（纯表情/单字/链接）时直接跳过；
-            # 长文本的 D 交给 chat_reply 的意图分析决定
-            last_text = collected[-1]
-            noise = (
-                len(last_text) <= 2
-                or last_text.startswith("http")
-                or not re.search(r"[\w\u4e00-\u9fff]", last_text)
-            )
-            if cls == "D" and noise:
-                return "no_reply"
-            if not need and cls != "D":
-                return "no_reply"
 
         if not args.live:
             print(f"  [dry] 会回复 {title!r}：{collected!r}")

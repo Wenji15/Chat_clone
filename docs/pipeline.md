@@ -12,7 +12,7 @@
 
 | 用途 | 模型 | 上下文 | 说明 |
 |------|------|--------|------|
-| 微信回复 / 意图 / 分类 | `qwen3.5:9b-q8_0-ctx8k` | 8k | 基础模型，think 关闭 |
+| 微信回复 / 意图 | `qwen3.5:9b-q8_0-ctx8k` | 8k | 基础模型，think 关闭 |
 | web/RAG 问答 | 同上 | 8k | think 可开（`thinking_answer`） |
 | 回复口吻（可选） | `clone-all`（微调） | — | 训练完由 `chat_reply_model` 指定 |
 | 红点行兜底识别 | `qwen2.5vl:3b-ctx` | 4k | 仅 OCR 读不出标题时调用 |
@@ -42,7 +42,6 @@
 
 | 环节 | 耗时 |
 |------|------|
-| 分类 | ~0.6s |
 | 意图 | ~0.6s |
 | 回复 | ~0.6s |
 | 冷启动（首次加载） | ~8s |
@@ -274,7 +273,7 @@ python scripts\person_pipeline.py --all --min-samples 100
 ```
 
 - **回复生成**（`chat_reply`）优先用 `clone-richer-v3`
-- **分类 / 工具 / RAG** 仍用 `qwen3.5:9b`（微调模型不一定遵守 JSON 输出）
+- **工具 / RAG** 仍用 `qwen3.5:9b`（微调模型不一定遵守 JSON 输出）
 
 ### 6.1 三层路由
 
@@ -379,7 +378,7 @@ schtasks /Create /SC WEEKLY /D SUN /TN "AI_Clone_Retrain" ^
 | 联系人画像 | `build_profiles.py` 生成性格/关系/态度/经历；`chat_reply` 注入 |
 | 历史检索 | `wechat_history_rag.py` 按会话向量检索 top-3；增量索引 |
 | 意图分析 | 增加 `topic`、`调侃/玩笑`、`addressed_to_me`（含“这个AI/学长”） |
-| 邀约规则 | 群内邀约未点名我 → 不回复（分类阶段拦截） |
+| 邀约规则 | 群内邀约未点名我 → 不回复（意图分析阶段拦截） |
 | 名词速查 | `entity_notes.json` 优先，Bing 2 秒兜底；调侃类不速查 |
 | 风格后处理 | 书面化短语替换；删除主动约时间/提议聚聚的句子 |
 | 训练 | 全量 2621 条重训（2 epoch，lr 1.2e-4，最优 epoch 选择）→ `output-all` |
@@ -440,7 +439,7 @@ schtasks /Create /SC WEEKLY /D SUN /TN "AI_Clone_Retrain" ^
 
 | 脚本 | 作用 | 用法 |
 |------|------|------|
-| `wechat_multi.py` | **多聊自动回复**：红点检测→白名单→分类→意图→回复→收起 | `python scripts\wechat_multi.py --live` |
+| `wechat_multi.py` | **多聊自动回复**：红点检测→白名单→意图→回复→收起 | `python scripts\wechat_multi.py --live` |
 | `wechat_screener.py` | 单聊自动回复（按目标会话） | `python scripts\wechat_screener.py --live --target 杨文祥` |
 | `wechat_ui.py` | Tkinter 控制台（后台调用上面两个） | `python scripts\wechat_ui.py` |
 
@@ -450,7 +449,7 @@ schtasks /Create /SC WEEKLY /D SUN /TN "AI_Clone_Retrain" ^
 |------|------|------|
 | `check.py` | 环境自检：Ollama、模型、配置 | `python scripts\check.py` |
 | `ocr_test.py` | 对一张图片做 OCR 并打印结果 | `python scripts\ocr_test.py 图片.png` |
-| `_*.py` | 临时探针（红点/头像/分类测试），可删 | — |
+| `_*.py` | 临时探针（红点/头像测试），可删 | — |
 
 > 日常只需要：`run_ui.bat` 启动；采集用 `wechat_collect_history.py`；更新语料后跑 `auto_pipeline.py`。
 
@@ -461,7 +460,7 @@ schtasks /Create /SC WEEKLY /D SUN /TN "AI_Clone_Retrain" ^
 机器人每次 OCR 到消息后，**先写入语料库再决定是否回复**：
 
 ```
-OCR → build_history → append_messages（去重）→ export_text → 分类/回复
+OCR → build_history → append_messages（去重）→ export_text → 意图/回复
 ```
 
 - 去重键：`(ts, sender, text)`，没有时间戳时退化为 `(sender, text)`

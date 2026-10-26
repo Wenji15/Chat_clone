@@ -25,7 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from src.wechat_store import STORE, clean_sender, load_messages  # noqa: E402
+from src.wechat_store import STORE, clean_sender, is_group_name, load_messages  # noqa: E402
 
 
 def _parse_ts(s):
@@ -97,7 +97,7 @@ def main() -> int:
 
             if args.turns:
                 turns = merge_turns(msgs)
-                is_group = chat.endswith("群") or chat == "🐦🐦"
+                is_group = is_group_name(chat)
                 scene = f"微信群「{chat}」" if is_group else f"私聊「{chat}」"
                 for i, t in enumerate(turns):
                     if i == 0:
@@ -163,7 +163,7 @@ def main() -> int:
                     if x.get("sender") and x.get("sender") != sender
                 ]
                 other = others[-1] if others else ""
-                is_group = chat.endswith("群") or chat == "🐦🐦"
+                is_group = is_group_name(chat)
                 if is_group:
                     scene = f"微信群「{chat}」"
                     if other:

@@ -19,6 +19,7 @@ from .memory import KnowledgeBase, LongTermMemory
 from .ollama_client import OllamaClient
 from .tools import TOOLS_SCHEMA, execute
 from .wechat_profile import load_profile
+from .wechat_store import is_group_name
 
 
 def _clean_reply(text: str) -> str:
@@ -291,7 +292,7 @@ class CloneAgent:
         if not recent:
             self.last_skip_reason = "没有可读对话"
             return ""
-        is_group = "群" in chat or chat == "🐦🐦"
+        is_group = is_group_name(chat)
         merged = _merge_history(recent, merge_them=not is_group)
         lines = []
         for m in merged:
@@ -389,7 +390,7 @@ class CloneAgent:
             except Exception:
                 me_names = set()
                 groups = set()
-            is_group = chat in groups or "群" in chat or chat == "🐦🐦"
+            is_group = chat in groups or is_group_name(chat)
             last_text = str(recent[-1].get("text", "")) if recent else ""
             explicit = "@" in last_text or any(
                 n and n in last_text for n in me_names

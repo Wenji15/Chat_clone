@@ -17,6 +17,12 @@ ROOT = Path(__file__).resolve().parent.parent
 STORE = ROOT / "data" / "wechat"
 
 
+def is_group_name(chat: str) -> bool:
+    """按名称判断是否群聊：含“群”或是纯 emoji 名称。"""
+    chat = chat or ""
+    return "群" in chat or bool(re.fullmatch(r"[\U0001F000-\U0001FAFF\s]+", chat))
+
+
 def safe_name(name: str) -> str:
     """把会话名转成安全的目录名。"""
     cleaned = re.sub(r'[\\/:*?"<>|\s]+', "_", name or "").strip("_")

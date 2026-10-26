@@ -16,7 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from src.wechat_store import STORE, load_messages, safe_name  # noqa: E402
+from src.wechat_store import STORE, is_group_name, load_messages, safe_name  # noqa: E402
 
 
 def main() -> int:
@@ -49,7 +49,7 @@ def main() -> int:
                     if x.get("sender") and x.get("sender") != sender
                 ]
                 other = others[-1] if others else ""
-                is_group = chat.endswith("群") or chat == "🐦🐦"
+                is_group = is_group_name(chat)
                 scene = f"微信群「{chat}」"
                 if is_group and other:
                     scene += f"，正在和「{other}」等人聊天"
