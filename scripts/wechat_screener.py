@@ -158,10 +158,43 @@ def last_bubble(lines: list[tuple[int, str]], y_tol: int = 60) -> tuple[int, str
     return y_bottom, "\n".join(t[1] for t in group)
 
 
+def find_senders(result: list, crop_w: int, gray) -> list[tuple[int, str]]:
+    """群聊里气泡上方的灰色名字标签。"""
+    out: list[tuple[int, str]] = []
+    for item in result:
+        box, text, score = item[0], str(item[1]), float(item[2])
+        if score < 0.5:
+            continue
+        t = text.strip()
+        if not t or TIME_RE.match(t) or not _meaningful(t):
+            continue
+        xs = [p[0] for p in box]
+        ys = [p[1] for p in box]
+        x0, y0, x1, y1 = int(min(xs)), int(min(ys)), int(max(xs)), int(max(ys))
+        if y1 - y0 < 8 or len(t) > 12:
+            continue
+        if x0 > crop_w * 0.35:
+            continue
+        if _darkness(gray, x0, y0, x1, y1 + 4) <= NAME_GRAY_MIN:
+            continue  # 只收灰色文字
+        out.append((y0, t))
+    return out
+
+
 def build_history(incoming, outgoing, limit: int = 40) -> list[dict]:
-    items = [(y, "them", t) for y, t in incoming] + [(y, "me", t) for y, t in outgoing]
+    items = []
+    for item in incoming:
+        y, t = item[0], item[1]
+        sender = item[2] if len(item) > 2 else ""
+        items.append((y, "them", t, sender))
+    for item in outgoing:
+        y, t = item[0], item[1]
+        items.append((y, "me", t, "我"))
     items.sort(key=lambda x: x[0])
-    return [{"role": role, "text": text} for _y, role, text in items[-limit:]]
+    return [
+        {"role": role, "text": text, "sender": sender}
+        for _y, role, text, sender in items[-limit:]
+    ]
 
 
 # --------------------------------------------------------------------- #
@@ -178,11 +211,22 @@ def analyze_once(engine: RapidOCR, hwnd: int):
     y1 = max(y0 + 50, h - MSG_BOTTOM_MARGIN)
     crop = img.crop((x0, y0, x1, y1))
     result = ocr_image(engine, crop)
+    gray = crop.convert("L")
     incoming, outgoing = split_messages(
-        result, crop.size[0], crop.convert("L"), np.asarray(crop.convert("RGB"))
+        result, crop.size[0], gray, np.asarray(crop.convert("RGB"))
     )
+    senders = find_senders(result, crop.size[0], gray)
     title = read_title(engine, img)
-    return last_bubble(incoming), last_bubble(outgoing), incoming, outgoing, title
+    is_group = bool(senders)
+    incoming3 = []
+    for y, t in incoming:
+        if is_group:
+            cand = [s for s in senders if 0 <= y - s[0] <= 55]
+            sender = max(cand, key=lambda s: s[0])[1] if cand else ""
+        else:
+            sender = title  # 单聊没有名字标签，用聊天框顶部标题
+        incoming3.append((y, t, sender))
+    return last_bubble(incoming3), last_bubble(outgoing), incoming3, outgoing, title
 
 
 def send_reply(hwnd: int, reply: str) -> None:

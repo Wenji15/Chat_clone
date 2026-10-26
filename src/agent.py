@@ -307,7 +307,7 @@ class CloneAgent:
         merged = _merge_history(recent, merge_them=not is_group)
         lines = []
         for m in merged:
-            who = "我" if m.get("role") == "me" else "对方"
+            who = "我" if m.get("role") == "me" else (m.get("sender") or "对方")
             lines.append(f"{who}：{str(m.get('text', '')).strip()}")
         convo = "\n".join(lines)
         style_examples = (
