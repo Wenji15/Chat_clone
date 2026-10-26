@@ -249,8 +249,8 @@ def main() -> int:
     ap.add_argument(
         "--step",
         type=int,
-        default=10,
-        help="每屏滚动格数(4-20；1 格约 3 行，10 格约 600px，留重叠)",
+        default=12,
+        help="每屏滚动格数（默认 12；滚太少可调 20-30，跳太多调到 6）",
     )
     ap.add_argument("--name", type=str, default="")
     ap.add_argument("--chat", type=str, default="", help="先搜索并打开这个会话")
@@ -361,9 +361,8 @@ def main() -> int:
             pass
         time.sleep(0.1)
         pyautogui.moveTo(left + int(w * 0.5), top + int(h * 0.6))
-        for _ in range(args.step):
-            pyautogui.scroll(-1)
-            time.sleep(0.04)
+        # 单次中档滚动：-1 太小窗口不响应，-120 一次跳太远
+        pyautogui.scroll(-args.step)
         time.sleep(0.8)
 
     if not any(screens):
