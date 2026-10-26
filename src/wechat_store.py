@@ -47,6 +47,22 @@ def load_messages(chat: str) -> list[dict]:
     return out
 
 
+def _data_heavy(text: str) -> bool:
+    """长文本里数字很多、或接龙/报名名单 → 统一记为“报名”。"""
+    if len(text) < 10:
+        return False
+    digits = sum(ch.isdigit() for ch in text)
+    if digits >= 10 and digits / len(text) >= 0.2:
+        return True
+    if ("接龙" in text or "报名" in text) and len(
+        re.findall(r"\d{1,2}[.、]", text)
+    ) >= 2:
+        return True
+    if len(re.findall(r"\d{1,2}[.、]", text)) >= 3:
+        return True
+    return False
+
+
 def append_messages(chat: str, msgs: list[dict]) -> int:
     """追加消息，按 (ts, sender, text) 去重（无 ts 时退化为 (sender, text)）。
 
@@ -68,6 +84,8 @@ def append_messages(chat: str, msgs: list[dict]) -> int:
         text = (m.get("text") or "").strip()
         if not text:
             continue
+        if _data_heavy(text):
+            text = "报名"
         ts = str(m.get("ts") or time.strftime("%Y-%m-%d %H:%M"))
         key = (ts, m.get("sender") or "", text)
         if key in seen:
