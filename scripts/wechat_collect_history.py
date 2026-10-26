@@ -253,6 +253,12 @@ def main() -> int:
         help="连续多少屏没有新消息才停止（懒加载需要多拖几次）",
     )
     ap.add_argument(
+        "--blank-timeout",
+        type=int,
+        default=120,
+        help="连续黑屏/空白多少秒后停止",
+    )
+    ap.add_argument(
         "--step",
         type=int,
         default=12,
@@ -338,6 +344,7 @@ def main() -> int:
     screens: list[list[dict]] = []
     seen: set[tuple[str, str]] = set()
     no_new = 0
+    blank_wait = 0
     for i in range(args.screens):
         if (ROOT / "STOP_COLLECT").exists():
             try:
@@ -350,7 +357,17 @@ def main() -> int:
             if (ROOT / "STOP_COLLECT").exists():
                 break
             time.sleep(0.3)
-        msgs = parse_history(engine, capture(hwnd), chat_name, me_names, is_group)
+        img = capture(hwnd)
+        if img is None or ws.is_blank(img):
+            blank_wait += 2
+            print(f"截图黑屏/空白，等待加载…（{blank_wait}s）")
+            time.sleep(2)
+            if blank_wait >= args.blank_timeout:
+                print(f"黑屏超过 {args.blank_timeout} 秒，停止")
+                break
+            continue
+        blank_wait = 0
+        msgs = parse_history(engine, img, chat_name, me_names, is_group)
         new = [
             m
             for m in msgs
