@@ -549,6 +549,32 @@ class CloneAgent:
             except Exception:
                 pass
 
+        # 防止复述对方刚说的话
+        last_msg = str(recent[-1].get("text", "")).strip()
+        if reply and last_msg and _similar(reply, last_msg):
+            try:
+                retry = [
+                    messages[0],
+                    {
+                        "role": "user",
+                        "content": messages[1]["content"]
+                        + "\n\n要求：不要复述对方的话，直接回一句你自己的反应。",
+                    },
+                ]
+                alt = self.llm.chat_native(
+                    retry,
+                    model=model,
+                    temperature=min(1.0, temperature + 0.2),
+                )
+                alt_text = _clean_reply(alt.strip())
+                if alt_text and not _similar(alt_text, last_msg):
+                    reply = alt_text
+                else:
+                    self.last_skip_reason = "模型在复述对方的话"
+                    return ""
+            except Exception:
+                pass
+
         # 防止复述历史原句
         if snippets:
             hist_lines = [
