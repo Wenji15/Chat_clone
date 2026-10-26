@@ -360,7 +360,8 @@ def main() -> int:
         raw = ROOT / "data" / "raw" / "wechat" / f"{safe_name(chat_name)}.md"
         raw.parent.mkdir(parents=True, exist_ok=True)
         lines = [f"# {chat_name} 聊天记录", ""]
-        for m in load_messages(chat_name):
+        # 原料按窗口习惯导出：新消息在上
+        for m in reversed(load_messages(chat_name)):
             lines.append(f"- [{m.get('ts', '')}] {m.get('sender', '')}：{m.get('text', '')}")
         raw.write_text("\n".join(lines), encoding="utf-8")
         print(f"已导出知识库原料：{raw}")

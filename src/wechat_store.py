@@ -96,10 +96,14 @@ def append_messages(chat: str, msgs: list[dict]) -> int:
 
 
 def export_text(chat: str) -> Path:
-    """导出为纯文本 chat.txt（按时间升序，新消息在下方）。"""
+    """导出为纯文本 chat.txt（对齐聊天记录窗口：新消息在上，旧消息在下）。
+
+    注意：messages.jsonl 内部仍按时间正序（旧→新），只有导出文件是倒序。
+    """
     msgs = sorted(
         load_messages(chat),
         key=lambda m: (str(m.get("ts", "")), int(m.get("seq") or 0)),
+        reverse=True,
     )
     out = chat_dir(chat) / "chat.txt"
     lines = []
