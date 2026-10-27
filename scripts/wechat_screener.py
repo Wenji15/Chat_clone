@@ -152,7 +152,7 @@ def last_bubble(lines: list[tuple[int, str]], y_tol: int = 60) -> tuple[int, str
     if not lines:
         return None
     lines = sorted(lines, key=lambda t: t[0])
-    y_bottom, _ = lines[-1]
+    y_bottom = lines[-1][0]
     group = [t for t in lines if y_bottom - t[0] <= y_tol]
     group.sort(key=lambda t: t[0])
     return y_bottom, "\n".join(t[1] for t in group)
