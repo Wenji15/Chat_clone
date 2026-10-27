@@ -45,52 +45,46 @@ data/finetune/sft_all_val.jsonl    # 验证集（10%）
 ```powershell
 python training/train_lora.py `
   --model training\models\Qwen2.5-7B-Instruct `
-  --data data/finetune/sft_all_train.jsonl `
-  --val data/finetune/sft_all_val.jsonl `
-  --output training\output-all `
-  --epochs 2 --lr 1.2e-4
+  --data data/finetune/sft_turns_train.jsonl `
+  --val data/finetune/sft_turns_val.jsonl `
+  --output training\output `
+  --epochs 1 --lr 1.2e-4 --max-length 1024
 ```
 
-v2 起的关键改进：
+关键设计：
 
-- **assistant-only loss**：只对"回复"算 loss，不再背上下文（避免吐出一整段聊天记录）
-- **场景化 system**：`你正在扮演「X」。场景：微信群「Y」，正在和「Z」等人聊天。`
-- **防过拟合**：`lr 1.2e-4`、LoRA dropout 0.1、weight decay 0.01、cosine 调度
-- **学会停**：`<|im_end|>` 放在 `{% generation %}` 掩码内
-
-> 如果 loss 后期掉到 1 以下、eval loss 反而上升，就是过拟合，减少 epoch 或加数据。
+- **assistant-only loss**：只对"回复"算 loss，不再背上下文
+- **带名字**：上下文用 `[发送者]`，目标不带前缀
+- **混合上下文**：短/中/长按 40/35/25，另有 10% @ 定向
+- **防过拟合**：lr 1.2e-4、LoRA dropout 0.1、weight decay 0.01、cosine 调度
 
 ## 3. 合并适配器
 
 ```powershell
 python training/merge_lora.py `
   --model training\models\Qwen2.5-7B-Instruct `
-  --adapter training/output-all `
-  --output training/merged-all
+  --adapter training/output `
+  --output training/merged
 ```
 
 ## 4. 转成 GGUF 并导入 Ollama
 
 ```powershell
-# 下载 llama.cpp（只需一次；国内用 ghproxy）
-curl.exe -L "https://ghproxy.net/https://github.com/ggerganov/llama.cpp/archive/refs/heads/master.zip" -o llama.zip
-Expand-Archive llama.zip -DestinationPath . -Force
-
 # 转 q8_0 GGUF（转换脚本只支持 f16/bf16/q8_0）
-python llama.cpp-master\convert_hf_to_gguf.py training\merged-all --outfile training\merged-all-q8.gguf --outtype q8_0
+python training\convert_hf_to_gguf.py training\merged --outfile training\merged-q8.gguf --outtype q8_0
 
-# 导入 Ollama（clone-all.Modelfile 指向 merged-all-q8.gguf）
-ollama create clone-all -f training\clone-all.Modelfile
-ollama run clone-all
+# 导入 Ollama（training/Modelfile 指向 merged-q8.gguf）
+ollama create clone-model -f training\Modelfile
+ollama run clone-model
 ```
 
-然后在 `config.json` 里把 **`chat_reply_model`** 改成 `clone-all`（回复走微调模型，分类/意图仍用基础模型）。
+然后在 `config.json` 里把 **`chat_reply_model`** 改成 `clone-model`（回复走微调模型）；想用基础模型就留空。
 
 ## 5. 效果验证
 
 ```powershell
-ollama run clone-richer "在吗，周末踢球不"
-ollama run clone-richer "今晚吃啥"
+ollama run clone-model "在吗，周末踢球不"
+ollama run clone-model "今晚吃啥"
 ```
 
 看回复是否像目标人物：短句、口头禅、语气。
