@@ -1,4 +1,4 @@
-FROM E:/agent_engineer/AI_clone/training/merged-v3-q8.gguf
+FROM E:/agent_engineer/AI_clone/training/merged-q8.gguf
 PARAMETER temperature 0.7
 PARAMETER top_p 0.9
 PARAMETER num_ctx 8192

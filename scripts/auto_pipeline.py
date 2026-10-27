@@ -16,10 +16,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PY = sys.executable
-MODEL_NAME = "clone-richer-v3"
-ADAPTER = "training/output-v3"
-MERGED = "training/merged-v3"
-GGUF = "training/merged-v3-q8.gguf"
+MODEL_NAME = "clone-model"
+ADAPTER = "training/output"
+MERGED = "training/merged"
+GGUF = "training/merged-q8.gguf"
 
 
 def run(cmd: list[str], desc: str) -> None:

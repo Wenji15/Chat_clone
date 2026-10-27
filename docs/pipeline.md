@@ -14,7 +14,7 @@
 |------|------|--------|------|
 | 微信回复 / 意图 | `qwen3.5:9b-q8_0-ctx8k` | 8k | 基础模型，think 关闭 |
 | web/RAG 问答 | 同上 | 8k | think 可开（`thinking_answer`） |
-| 回复口吻（可选） | `clone-all`（微调） | — | 训练完由 `chat_reply_model` 指定 |
+| 回复生成 | 基础模型（`chat_reply_model` 留空） | 8k | 如需微调模型再指定 |
 | 红点行兜底识别 | `qwen2.5vl:3b-ctx` | 4k | 仅 OCR 读不出标题时调用 |
 | 历史检索 / RAG | `bge-m3` | — | 向量嵌入 |
 
@@ -194,22 +194,20 @@ python scripts\query.py "闫总是谁"        # 检索 + 回答
 ### 5.4 命令
 
 ```powershell
-# 1) 导出数据
-python scripts\export_sft.py --all
-# 按轮次导出（合并连续同人、不标发言人、带时间间隔）
-python scripts\export_sft.py --turns
+# 1) 导出数据（带名字 + 混合上下文 + 10% @ 定向）
+python scripts\export_sft.py --turns --names --mix-context --gap-ratio 0.1
 
-# 2) 训练（16G 显存：7B + 4bit QLoRA）
-python training\train_lora.py --model training\models\Qwen2.5-7B-Instruct --epochs 2 --lr 1.2e-4
+# 2) 训练（16G 显存：7B + 4bit QLoRA，长上下文 1024）
+python training\train_lora.py --model training\models\Qwen2.5-7B-Instruct --epochs 1 --lr 1.2e-4 --max-length 1024
 
 # 3) 合并
-python training\merge_lora.py --model training\models\Qwen2.5-7B-Instruct --adapter training\output-all --output training\merged-all
+python training\merge_lora.py --adapter training\output --output training\merged
 
 # 4) 转 GGUF（q8_0，约 8GB）
-python training\convert_hf_to_gguf.py training\merged-all --outfile training\merged-all-q8.gguf --outtype q8_0
+python training\convert_hf_to_gguf.py training\merged --outfile training\merged-q8.gguf --outtype q8_0
 
-# 5) 导入 Ollama
-ollama create clone-richer-v3 -f training\Modelfile
+# 5) 导入 Ollama（training/Modelfile 指向 merged-q8.gguf）
+ollama create clone-model -f training\Modelfile
 ```
 
 > 为什么 q8_0 而不是 q4：转换脚本只支持 f16/bf16/q8_0；q8 质量好、16G 显存放得下（8GB）。
@@ -229,37 +227,21 @@ ollama create clone-richer-v3 -f training\Modelfile
   - 群里大量短句、@、重复接龙，模型学到的“回复”本身信息量低
   - 想明显提升，需要 5000+ 条干净语料，或**按人/按群分别训练**
 
-### 5.6 按人训练（每人一个 LoRA）
+### 5.6 按人训练（已废弃）
 
-目标：让分身能**按指定人的风格**说话。
+`person_pipeline.py` 已删除。现在改为**人物档案**，不再给每个人训一个 LoRA：
 
 ```powershell
-# 1) 按人导出（默认 ≥100 条才导出）
-python scripts\export_person.py --min-samples 100
+# 单个人
+python scripts\build_people.py --person 田政 --context 5
 
-# 2) 训练某个人（自动完成：训练 → 合并 → GGUF → Ollama）
-python scripts\person_pipeline.py --person 王宇航
-
-# 3) 或训练所有达标的人
-python scripts\person_pipeline.py --all --min-samples 100
+# 所有人（两个重点群）
+python scripts\build_people.py --chats "小鸽哥踢球群,🐦🐦" --context 5 --min-messages 20
 ```
 
-模型命名：中文名映射为 ASCII，例如 `王宇航 → clone-wangyuhang`、`田政 → clone-tianzheng`。
+输出 `data/people/<标准名>.md`，推理时只注入当前说话人的档案。
 
-当前达标的人（≥100 条）：
-
-| 人 | 样本 | 模型 |
-|----|------|------|
-| 王宇航 | 310 | clone-wangyuhang |
-| 田政 | 248 | clone-tianzheng |
-| 小江 | 214 | clone-xiaojiang |
-| 苏博 | 189 | clone-subo |
-| 盖瑞 | 187 | clone-gairy |
-| 马灯 | 148 | clone-madeng |
-| 闫啸SEAN | 140 | clone-sean |
-
-> 每人样本 100–300 时，2 epoch + lr 1.2e-4 即可；人少时把 `--epochs` 降到 1。
-> 想“一个模型切换多人”，用 `sft_all`（system 指定扮演谁）；想“每个人最像”，用按人训练。
+> 原因：每人几百条数据训出来的 LoRA 容易复读，且新增成员要重训；档案可随时改、即时生效。
 
 ## 6. 模型接入
 
@@ -267,31 +249,25 @@ python scripts\person_pipeline.py --all --min-samples 100
 
 ```json
 {
-  "ollama": { "chat_model": "qwen3.5:9b" },
-  "chat_reply_model": "clone-richer-v3"
+  "ollama": { "chat_model": "qwen3.5:9b-q8_0-ctx8k" },
+  "chat_reply_model": ""
 }
 ```
 
-- **回复生成**（`chat_reply`）优先用 `clone-richer-v3`
-- **工具 / RAG** 仍用 `qwen3.5:9b`（微调模型不一定遵守 JSON 输出）
+- **回复生成**（`chat_reply`）：`chat_reply_model` 为空 → 基础模型
+- **工具 / RAG**：基础模型
+- 想用微调模型：把 `chat_reply_model` 改成 `clone-xxx`（需先训练并导入）
 
-### 6.1 三层路由
+### 6.1 路由
 
-| 场景 | 用哪个模型 |
-|------|-----------|
-| 会话在 `config.json` 的 `chat_models` 里指定了模型 | 该人格模型（如 `clone-wangyuhang`） |
-| 会话在 `data/wechat/<会话>` 有语料 | 微调模型（学口吻） |
-| 会话没有对应语料 | 基础模型 `qwen3.5:9b`（通用能力） |
-| 微调输出空 / 拒绝语 / @刷屏复读 | 自动回退基础模型 |
+| 场景 | 用哪个 |
+|------|--------|
+| 微信回复 | 基础模型 + 群画像 + 当前说话人档案 |
+| 工具 / RAG | 基础模型 |
+| 群聊邀请但没点名我 | 不回复（意图规则） |
+| 微调模型输出空/复读 | 回退基础模型（`chat_reply_model` 非空时） |
 
-示例（按群/按人指定不同人格）：
-
-```json
-"chat_models": {
-  "外卖一群": "clone-wangyuhang",
-  "小鸽哥踢球群": "clone-richer-v3"
-}
-```
+`chat_models` 默认为空；需要按会话指定模型时再填。
 
 ### 6.2 回复后处理
 
@@ -336,7 +312,7 @@ schtasks /Create /SC WEEKLY /D SUN /TN "AI_Clone_Retrain" ^
 | `export_sft.py` | `--all`（所有人）/ 默认只学我 / `--split 0.9` |
 | `clean_corpus.py` | `--apply` 真正清洗；默认只统计 |
 | `export_person.py` | `--min-samples 100` |
-| `person_pipeline.py` | `--person 王宇航` / `--all` |
+| `build_people.py` | 按人生成档案（`data/people/<名>.md`） | `--person 田政 --context 5` |
 | `train_lora.py` | `--model` `--epochs` `--lr` `--max-length` `--no-4bit` |
 | `merge_lora.py` | `--model` `--adapter` `--output` |
 | `auto_pipeline.py` | `--train` `--epochs` `--lr` `--skip-ingest` |
@@ -403,8 +379,7 @@ schtasks /Create /SC WEEKLY /D SUN /TN "AI_Clone_Retrain" ^
 | 脚本 | 作用 | 典型用法 |
 |------|------|---------|
 | `wechat_collect_history.py` | **主采集**：从“聊天记录”窗口逐屏 OCR（发送者/时间/内容） | `python scripts\wechat_collect_history.py --screens 10 --step 18 --auto-open --chat 小鸽哥踢球群` |
-| `wechat_historian.py` | 旧方式：在当前聊天框里**向上滚动**采集 | `python scripts\wechat_historian.py --screens 5 --step 5` |
-| `wechat_collect.py` | 聊天框**向下翻页**采集（无历史窗口时备用） | `python scripts\wechat_collect.py --screens 10 --step 3` |
+| `wechat_collect.py` | 旧版聊天框采集（UI 仍保留入口，建议用历史窗口） | `python scripts\wechat_collect.py --screens 10 --step 3` |
 | `wechat_capture.py` | 截微信窗口 + 全窗 OCR，用于**校准坐标** | `python scripts\wechat_capture.py` |
 
 ### 12.3 语料清洗 / 画像
@@ -432,7 +407,8 @@ schtasks /Create /SC WEEKLY /D SUN /TN "AI_Clone_Retrain" ^
 | `training/convert_hf_to_gguf.py` | 转 GGUF（q8_0） | `python training\convert_hf_to_gguf.py training\merged-all --outfile training\merged-all-q8.gguf --outtype q8_0` |
 | `training/train_vlm_lora.py` | VLM（Qwen2.5-VL）LoRA 训练 | `python training\train_vlm_lora.py --epochs 1 --lr 1e-4` |
 | `training/merge_vlm_lora.py` | 合并 VLM 适配器 | `python training\merge_vlm_lora.py --adapter training\vlm-output --output training\vlm-merged` |
-| `person_pipeline.py` | 按人训练一条龙（导出→训练→合并→GGUF→Ollama） | `python scripts\person_pipeline.py --person 王宇航`<br>`python scripts\person_pipeline.py --all --min-samples 100` |
+| `build_people.py` | 按人档案（±上下文、活跃度统计、低样本降级） | `python scripts\build_people.py --person 田政 --context 5` |
+| `wechat_burst.py` | 连续发送测试（≤20 条，可模型生成） | `python scripts\wechat_burst.py --chat 文件传输助手 --count 5 --generate` |
 | `auto_pipeline.py` | 一键流水线（数据+RAG；`--train` 重训） | `python scripts\auto_pipeline.py --train` |
 
 ### 12.6 微信机器人
@@ -455,17 +431,12 @@ schtasks /Create /SC WEEKLY /D SUN /TN "AI_Clone_Retrain" ^
 
 ## 13. 实时采集与跟聊（P0）
 
-### 13.1 实时入库
+### 13.1 实时入库（已取消）
 
-机器人每次 OCR 到消息后，**先写入语料库再决定是否回复**：
+2026-10-27 起，回复流程**不再自动把聊天写入语料**。
 
-```
-OCR → build_history → append_messages（去重）→ export_text → 意图/回复
-```
-
-- 去重键：`(ts, sender, text)`，没有时间戳时退化为 `(sender, text)`
-- 新消息带 `source: "live"`，与历史采集的 `collect` 区分
-- 只在新增加时导出 `chat.txt`，不重复写盘
+- 采集只走 `wechat_collect_history.py`（或控制台）
+- 回复时只读当前窗口，不写 `messages.jsonl`
 
 ### 13.2 跟聊循环
 
@@ -478,7 +449,6 @@ OCR → build_history → append_messages（去重）→ export_text → 意图/
 ```
 
 - 最多 3 轮，防止和人"对刷"
-- 跟聊期间也会实时入库
 - 新消息判定：`最后一条 incoming 时间 > 最后一条 outgoing 时间`
 
 ### 13.3 检索窗口
@@ -486,12 +456,12 @@ OCR → build_history → append_messages（去重）→ export_text → 意图/
 `history` 检索只取：
 
 ```json
-"history_days": 3,
-"history_max_messages": 999
+"history_days": 1,
+"history_max_messages": 99
 ```
 
-- 先按 `ts` 过滤最近 3 天（无时间戳的保留）
-- 超过 999 条只取最近 999
+- 先按 `ts` 过滤最近 **1 天**（无时间戳的保留）
+- 超过 **99** 条只取最近 99
 - 再做余弦 top-k（`history_topk` / `history_min_score` / `history_window`）
 
 > 效果：不会因为几个月前的旧消息干扰当前话题，也避免索引无限增长后检索变慢。
@@ -525,3 +495,17 @@ OCR → build_history → append_messages（去重）→ export_text → 意图/
 - **人名校验**：回复里出现“叫上/找/问/跟 + 人名”，但该名字不在历史发送者/我的昵称里 → 判定为编造
   1. 重新生成一次（提示不要提该名字）
   2. 仍出现则删掉含该名字的分句
+
+## 14. 2026-10-27 变更
+
+| 变更 | 说明 |
+|------|------|
+| 回复模型 | `chat_reply_model=""` → 基础模型 `qwen3.5:9b-q8_0-ctx8k` |
+| 自动入库 | **取消**：回复时不再写语料，采集只走独立脚本 |
+| 历史窗口 | 近 **1 天 / ≤99 条** |
+| 发送人识别 | 群聊读气泡上方灰色名字；单聊用聊天框顶部标题 |
+| 人名归一 | `is_me_name` + `names.txt` 别名；Richer/吴人机/马灯 → 我 |
+| 人物档案 | 47 份 `data/people/*.md`；头部统计（消息数/天数/占比）+ 低样本降级 |
+| 训练 | 带名字、混合上下文 40/35/25、@ 定向 10%；eval **3.883** |
+| 控制台 | 复核模式；连续发送（≤20 条，可模型生成）；白名单加高 |
+| 清理 | 删除旧 LoRA/合并模型/GGUF/废弃脚本；Ollama 只保留 3 个模型 |
